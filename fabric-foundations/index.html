@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fabric Foundations · Core Concepts — DP-700</title>
+  <meta name="description" content="DP-700 prerequisite notes: Microsoft Fabric architecture, OneLake, workspaces and domains, capacities and CUs, Lakehouse vs Warehouse vs Eventhouse, Delta Lake internals, OneLake shortcuts and the Fabric item taxonomy.">
+  <meta name="author" content="Marco Grimaldi">
+  <link rel="canonical" href="https://marcogrimaldi29.com/dp-700-study-notes-v2/fabric-foundations/">
+  <meta name="robots" content="index, follow">
+  <meta name="theme-color" content="#0f6cbd">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="DP-700 Study Notes v2">
+  <meta property="og:title" content="Fabric Foundations · Core Concepts — DP-700">
+  <meta property="og:description" content="OneLake, workspaces, capacities and CUs, Lakehouse vs Warehouse vs Eventhouse, Delta Lake internals and OneLake shortcuts.">
+  <meta property="og:url" content="https://marcogrimaldi29.com/dp-700-study-notes-v2/fabric-foundations/">
+  <meta property="og:image" content="https://marcogrimaldi29.com/dp-700-study-notes-v2/assets/images/site-mark-no-bg.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Fabric Foundations · Core Concepts — DP-700">
+  <meta name="twitter:description" content="The Fabric mental model every DP-700 question builds on.">
+  <meta name="twitter:image" content="https://marcogrimaldi29.com/dp-700-study-notes-v2/assets/images/site-mark-no-bg.png">
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@graph":[{"@type":"TechArticle","headline":"Fabric Foundations · Core Concepts — DP-700","description":"Microsoft Fabric architecture, OneLake, capacities and CUs, Lakehouse vs Warehouse vs Eventhouse, Delta Lake internals and OneLake shortcuts.","inLanguage":"en","url":"https://marcogrimaldi29.com/dp-700-study-notes-v2/fabric-foundations/","author":{"@type":"Person","name":"Marco Grimaldi","url":"https://marcogrimaldi29.com/"},"isPartOf":"https://marcogrimaldi29.com/dp-700-study-notes-v2/"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"DP-700 Study Notes v2","item":"https://marcogrimaldi29.com/dp-700-study-notes-v2/"},{"@type":"ListItem","position":2,"name":"Fabric Foundations","item":"https://marcogrimaldi29.com/dp-700-study-notes-v2/fabric-foundations/"}]}]}
+  </script>
+  <link rel="icon" href="../assets/images/site-mark-no-bg.png">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body data-page="foundations">
+  <div class="layout" style="--accent:var(--d0)">
+
+    <aside class="toc"><h4>On this page</h4><nav id="toc-list"></nav></aside>
+
+    <main class="content">
+      <div class="page-head">
+        <div class="kicker">Foundations · Prerequisite</div>
+        <h1>Microsoft Fabric foundations</h1>
+        <p>Not a scored domain — but every scored question assumes this material. If you are fluent in OneLake, capacities, the three storage engines and Delta Lake, most of the exam becomes a matter of elimination.</p>
+      </div>
+
+      <div class="card">
+        <strong>What this page covers:</strong>
+        <ul style="margin-bottom:0">
+          <li><a href="#architecture">Fabric architecture</a> and the <a href="#items">item taxonomy</a></li>
+          <li><a href="#onelake">OneLake</a> — the single logical lake, and how paths resolve</li>
+          <li><a href="#capacity">Capacities, CUs, smoothing, bursting and throttling</a></li>
+          <li><a href="#engines">Lakehouse vs Warehouse vs Eventhouse</a> — the single most tested decision</li>
+          <li><a href="#delta">Delta Lake internals</a> and <a href="#shortcuts">OneLake shortcuts</a></li>
+        </ul>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="architecture"><span class="num">0.1</span> What Microsoft Fabric is</h2>
+
+      <p>Microsoft Fabric is an <strong>end-to-end, SaaS analytics platform</strong>. It unifies data engineering, data integration, data warehousing, real-time intelligence, data science and business intelligence into one product, on one storage layer, under one capacity-based licence.</p>
+
+      <p>The word that matters for the exam is <strong>SaaS</strong>. You do not provision storage accounts, Spark clusters, integration runtimes or SQL pools. Contrast with Azure Synapse + ADF, where each of those is a resource you create and manage.</p>
+
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+flowchart TD
+  F["Microsoft Fabric<br/>(unified SaaS analytics)"] --> OL["OneLake<br/>single logical data lake"]
+  F --> DE["Data Engineering<br/>Lakehouse · Notebook · Spark Job"]
+  F --> DF["Data Factory<br/>Pipeline · Dataflow Gen2 · Airflow"]
+  F --> DW["Data Warehouse<br/>T-SQL analytics"]
+  F --> RTI["Real-Time Intelligence<br/>Eventstream · Eventhouse · Activator"]
+  F --> DS["Data Science<br/>Experiment · ML model"]
+  F --> PBI["Power BI<br/>Semantic model · Report"]
+  OL --> D["Delta Lake / Parquet<br/>open format, one copy of data"]
+        </div>
+        <div class="mm-cap">Every workload writes to the same OneLake in the same open Delta format — that is the core Fabric promise.</div>
+      </div>
+
+      <h3 id="hierarchy">The tenancy hierarchy</h3>
+      <p>Four levels, and questions about governance or security almost always turn on which level a setting lives at:</p>
+      <div class="table-wrap">
+        <table class="tbl">
+          <thead><tr><th>Level</th><th>What it is</th><th>Who controls it</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Tenant</strong></td><td>One per Entra ID organization. Home of the admin portal and tenant settings.</td><td>Fabric administrator</td></tr>
+            <tr><td><strong>Domain</strong></td><td>A logical grouping of workspaces by business area (Finance, Sales). Enables federated governance and data-hub discovery.</td><td>Domain admin / contributor</td></tr>
+            <tr><td><strong>Capacity</strong></td><td>The compute pool (an F SKU) that a workspace is assigned to. All workloads in the workspace draw CUs from it.</td><td>Capacity admin</td></tr>
+            <tr><td><strong>Workspace</strong></td><td>The collaboration container holding items. Carries the four roles and the Git connection.</td><td>Workspace admin</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout exam">
+        <p class="ct-title">Caveat — domain ≠ capacity</p>
+        <p>A <strong>domain</strong> is a governance/organizational grouping; a <strong>capacity</strong> is a billing/compute assignment. They are independent: workspaces in one domain can sit on different capacities, and one capacity can host workspaces from many domains. Questions that mix the two are testing exactly this.</p>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="onelake"><span class="num">0.2</span> OneLake — the single logical data lake</h2>
+
+      <p>OneLake is the "OneDrive for data": <strong>one lake per tenant</strong>, provisioned automatically, that every Fabric item stores into. There is exactly one, you cannot create a second, and you cannot delete it.</p>
+
+      <div class="table-wrap">
+        <table class="tbl">
+          <thead><tr><th>Attribute</th><th>Detail</th></tr></thead>
+          <tbody>
+            <tr><td>Default table format</td><td><strong>Delta Lake</strong> (Parquet data files + <code>_delta_log</code> transaction log)</td></tr>
+            <tr><td>API surface</td><td><strong>ADLS Gen2-compatible</strong> — anything that speaks ADLS Gen2 can address it (<code>abfss://</code>)</td></tr>
+            <tr><td>Hierarchy</td><td>Tenant → Workspace → Item → <code>Tables/</code> and <code>Files/</code></td></tr>
+            <tr><td>Provisioning</td><td>Automatic with the tenant — no storage account to create</td></tr>
+            <tr><td>External data</td><td>Reached via <strong>shortcuts</strong> (ADLS Gen2, S3, GCS, Dataverse, S3-compatible) without copying</td></tr>
+            <tr><td>Encryption</td><td>At rest by default (Microsoft-managed keys)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>OneLake path anatomy</h4>
+      <p>You will see this format in notebook code and in shortcut/pipeline configuration. Be able to read it:</p>
+      <div class="code-block"><span class="lang">path</span><pre class="code"><code>abfss://<span class="st">&lt;workspace&gt;</span>@onelake.dfs.fabric.microsoft.com/<span class="st">&lt;item&gt;</span>.Lakehouse/Tables/<span class="st">&lt;table&gt;</span>
+abfss://<span class="st">&lt;workspace&gt;</span>@onelake.dfs.fabric.microsoft.com/<span class="st">&lt;item&gt;</span>.Lakehouse/Files/<span class="st">&lt;folder&gt;</span>
+
+<span class="cm"># Workspace and item may be given as names or as GUIDs — GUIDs are stable</span>
+<span class="cm"># across renames, so prefer them in production pipelines and shortcuts.</span></code></pre></div>
+
+      <div class="callout exam">
+        <p class="ct-title">Caveat — Tables/ vs Files/</p>
+        <p>In a Lakehouse, <code>Tables/</code> holds <strong>managed Delta tables</strong> that appear in the SQL analytics endpoint and the object explorer. <code>Files/</code> holds <strong>unmanaged files</strong> of any format (CSV, JSON, images, checkpoints) that do <em>not</em> appear as tables. Writing a Parquet file into <code>Files/</code> does not create a queryable table — it must be a Delta table under <code>Tables/</code>, and it must be in the correct folder structure to be auto-discovered.</p>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="capacity"><span class="num">0.3</span> Capacity, CUs, smoothing and throttling</h2>
+
+      <p>Fabric compute is bought as a <strong>capacity</strong>, measured in <strong>Capacity Units (CUs)</strong>. Every operation — a Spark job, a T-SQL query, a Dataflow refresh, a pipeline run — consumes CU-seconds from the capacity the workspace sits on.</p>
+
+      <h3 id="skus">F SKUs and Spark vCores</h3>
+      <p>The rule to memorize: <strong>1 CU = 2 Spark vCores</strong>, with a <strong>3× burst factor</strong> available on top.</p>
+      <div class="table-wrap">
+        <table class="tbl">
+          <thead><tr><th>SKU</th><th>CUs</th><th>Base Spark vCores</th><th>Max with 3× burst</th><th>Typical use</th></tr></thead>
+          <tbody>
+            <tr><td><strong>F2</strong></td><td>2</td><td>4</td><td>12</td><td>Dev / test / learning</td></tr>
+            <tr><td><strong>F4</strong></td><td>4</td><td>8</td><td>24</td><td>Small team</td></tr>
+            <tr><td><strong>F8</strong></td><td>8</td><td>16</td><td>48</td><td>Small production</td></tr>
+            <tr><td><strong>F16</strong></td><td>16</td><td>32</td><td>96</td><td>Medium production</td></tr>
+            <tr><td><strong>F32</strong></td><td>32</td><td>64</td><td>192</td><td>Large production</td></tr>
+            <tr><td><strong>F64</strong></td><td>64</td><td>128</td><td>384</td><td>Enterprise <span class="pill p-blue">key threshold</span></td></tr>
+            <tr><td><strong>F128 – F2048</strong></td><td>128 – 2048</td><td>256 – 4096</td><td>768 – 12288</td><td>Large enterprise</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout exam">
+        <p class="ct-title">Caveat — why F64 is the magic number</p>
+        <p><strong>F64</strong> (and above) is the threshold where <strong>free-licensed users can consume</strong> Power BI content in the workspace — below F64, every consumer needs a Power BI Pro licence. F64 is also the entry point for several premium capabilities. If a question mentions "users without Pro licences need to view reports", the answer involves <strong>F64+</strong>.</p>
+      </div>
+
+      <h3 id="smoothing">Smoothing, bursting and throttling</h3>
+      <p>Fabric does not hard-stop you the moment you exceed your CUs. It applies three mechanisms in sequence, and the exam likes the ordering:</p>
+      <div class="table-wrap">
+        <table class="tbl t-teal">
+          <thead><tr><th>Mechanism</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Bursting</strong></td><td>Temporarily uses <em>more</em> compute than the SKU provides so a job finishes faster. Spark bursts up to 3×.</td></tr>
+            <tr><td><strong>Smoothing</strong></td><td>Spreads the CU cost of that burst over time so short spikes don't trip limits. <strong>Background</strong> operations (pipelines, Spark jobs, refreshes) smooth over <strong>24 hours</strong>; <strong>interactive</strong> operations smooth over <strong>5 minutes</strong>.</td></tr>
+            <tr><td><strong>Throttling</strong></td><td>Applied only once smoothed usage has borrowed too far into future capacity.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The throttling ladder, by how much future capacity has been consumed:</p>
+      <div class="table-wrap">
+        <table class="tbl t-red">
+          <thead><tr><th>Future capacity used</th><th>Stage</th><th>Effect</th></tr></thead>
+          <tbody>
+            <tr><td>Under 10 minutes</td><td>Overage protection</td><td>Nothing — smoothing absorbs it</td></tr>
+            <tr><td>10 – 60 minutes</td><td><strong>Interactive delay</strong></td><td>Interactive requests delayed ~20 s; background jobs unaffected</td></tr>
+            <tr><td>60 minutes – 24 hours</td><td><strong>Interactive rejection</strong></td><td>Interactive requests rejected; background jobs still run</td></tr>
+            <tr><td>Over 24 hours</td><td><strong>Background rejection</strong></td><td>Everything rejected — the capacity is effectively stalled</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout tip">
+        <p class="ct-title">Diagnosing capacity pain</p>
+        <p>The <strong>Microsoft Fabric Capacity Metrics app</strong> is the answer whenever a question asks how to <em>investigate</em> CU consumption, find the noisiest item, or see throttling and carryforward. Remediation is: scale the SKU up, move the offending workspace to another capacity, or reschedule heavy background jobs off-peak.</p>
+      </div>
+      <div class="callout warn">
+        <p class="ct-title">Pausing a capacity</p>
+        <p>Pausing stops billing, but it also makes <strong>every item on that capacity unusable</strong> — reports won't render, scheduled jobs won't run. Any accumulated carryforward is settled at the moment of pause. A trial capacity runs <strong>60 days</strong> and behaves like an F64 for feature-gating purposes.</p>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="items"><span class="num">0.4</span> The Fabric item taxonomy</h2>
+
+      <p>Know which workload an item belongs to and, more importantly, what it is <em>for</em>. Distractors in this exam are usually real items used in the wrong role.</p>
+      <div class="table-wrap">
+        <table class="tbl">
+          <thead><tr><th>Workload</th><th>Items</th><th>What you use them for</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Data Engineering</strong></td><td>Lakehouse, Notebook, Spark Job Definition, Environment</td><td>Spark-based storage and transformation; Environment packages libraries and Spark config for reuse</td></tr>
+            <tr><td><strong>Data Factory</strong></td><td>Data Pipeline, Dataflow Gen2, Copy job, Apache Airflow job, Mirrored database</td><td>Ingestion and orchestration; Airflow job is managed Apache Airflow for DAG-based orchestration</td></tr>
+            <tr><td><strong>Data Warehouse</strong></td><td>Warehouse, SQL analytics endpoint</td><td>Full read/write T-SQL, stored procedures, multi-table transactions</td></tr>
+            <tr><td><strong>Real-Time Intelligence</strong></td><td>Eventstream, Eventhouse, KQL database, KQL queryset, Real-time dashboard, Activator</td><td>Streaming ingestion, time-series storage and KQL analytics, event-driven alerting</td></tr>
+            <tr><td><strong>Data Science</strong></td><td>Experiment, ML model</td><td>MLflow-backed training and model registry</td></tr>
+            <tr><td><strong>Power BI</strong></td><td>Semantic model, Report, Dashboard</td><td>The BI serving layer over everything above</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout note">
+        <p class="ct-title">Three items people confuse</p>
+        <p><strong>Copy job</strong> — a simplified, standalone ingestion item for batch or incremental copy without authoring a whole pipeline. <strong>Environment</strong> — a reusable bundle of libraries + Spark properties + resources you attach to notebooks. <strong>Activator</strong> (formerly Data Activator / Reflex) — the no-code rules engine that watches a stream or report and fires actions or alerts.</p>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="engines"><span class="num">0.5</span> Lakehouse vs Warehouse vs Eventhouse</h2>
+
+      <p>This is the highest-frequency decision on the exam. All three store data in OneLake; they differ in <strong>engine, write path and workload shape</strong>.</p>
+
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+flowchart TD
+  S([Where should this data live?]) --> Q1{Primary access pattern}
+  Q1 -->|"T-SQL read AND write<br/>stored procs, transactions"| WH["Warehouse"]
+  Q1 -->|"Spark + SQL, files and tables<br/>data science, unstructured"| LH["Lakehouse"]
+  Q1 -->|"High-volume events<br/>time-series, logs, sub-second"| EH["Eventhouse / KQL DB"]
+  LH --> SEP["SQL analytics endpoint<br/>auto-created, READ-ONLY"]
+  WH --> XDB["Native cross-database queries<br/>across Warehouses + Lakehouse endpoints"]
+        </div>
+        <div class="mm-cap">Pick the engine from the access pattern, not from the data format — all three are Delta/Parquet underneath.</div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="tbl t-teal">
+          <thead><tr><th>Capability</th><th>Lakehouse</th><th>Warehouse</th><th>Eventhouse (KQL DB)</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Primary engine</strong></td><td>Apache Spark</td><td>T-SQL (distributed SQL engine)</td><td>Kusto / KQL</td></tr>
+            <tr><td><strong>Storage format</strong></td><td>Delta Lake</td><td>Delta Lake</td><td>Native Kusto storage, exposed as Delta in OneLake</td></tr>
+            <tr><td><strong>T-SQL writes</strong></td><td>❌ Endpoint is <strong>read-only</strong></td><td>✅ Full INSERT / UPDATE / DELETE / MERGE</td><td>❌ (KQL <code>.ingest</code> / update policies)</td></tr>
+            <tr><td><strong>Stored procedures</strong></td><td>❌</td><td>✅</td><td>Stored functions</td></tr>
+            <tr><td><strong>Multi-table transactions</strong></td><td>❌ (per-table ACID only)</td><td>✅</td><td>❌</td></tr>
+            <tr><td><strong>Unstructured files</strong></td><td>✅ <code>Files/</code> section</td><td>❌ Tables only</td><td>❌</td></tr>
+            <tr><td><strong>Schema approach</strong></td><td>Schema-on-read and on-write</td><td>Schema-on-write</td><td>Schema-on-write, with update policies</td></tr>
+            <tr><td><strong>Ingestion latency</strong></td><td>Batch / micro-batch</td><td>Batch</td><td><strong>Seconds</strong>, streaming-native</td></tr>
+            <tr><td><strong>Best persona</strong></td><td>Data engineer, data scientist</td><td>SQL analyst, BI developer</td><td>Ops / IoT / security analyst</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout exam">
+        <p class="ct-title">Caveat — the read-only SQL analytics endpoint</p>
+        <p>Every Lakehouse automatically gets a <strong>SQL analytics endpoint</strong>. It speaks T-SQL, supports views, RLS/CLS and DDM, and is <strong>read-only for data</strong> — no <code>INSERT</code>, <code>UPDATE</code>, <code>DELETE</code> or <code>MERGE</code> against Lakehouse tables through it. If the requirement includes T-SQL writes or stored procedures, the answer is a <strong>Warehouse</strong>. This trap appears on nearly every DP-700 attempt.</p>
+      </div>
+      <div class="callout warn">
+        <p class="ct-title">Endpoint metadata lag</p>
+        <p>The SQL analytics endpoint syncs table metadata from the Delta log asynchronously. A table just written by Spark can take a short while to become visible or to reflect a schema change. If a question describes "the table exists in the Lakehouse but the SQL endpoint doesn't show it / shows stale columns", that is <strong>metadata sync lag</strong> — refresh the endpoint metadata rather than rewriting the data.</p>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="delta"><span class="num">0.6</span> Delta Lake internals</h2>
+
+      <p>Delta Lake is the default table format across Fabric. It is Parquet data files plus a <code>_delta_log</code> transaction log, and that log is what buys you ACID, time travel and change feeds.</p>
+
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+flowchart TD
+  T["Delta table folder"] --> L["_delta_log/"]
+  T --> P["part-*.snappy.parquet<br/>(data files)"]
+  L --> J0["00000000000000000000.json"]
+  L --> J1["00000000000000000001.json"]
+  L --> CP["00000000000000000010.checkpoint.parquet<br/>(checkpoint every 10 commits)"]
+        </div>
+        <div class="mm-cap">Each commit writes a JSON entry; every 10th commit is compacted into a Parquet checkpoint so readers don't replay the whole log.</div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="tbl">
+          <thead><tr><th>Feature</th><th>What it gives you</th><th>How</th></tr></thead>
+          <tbody>
+            <tr><td><strong>ACID transactions</strong></td><td>Atomic, consistent, isolated, durable writes on a data lake</td><td>Optimistic concurrency over the transaction log</td></tr>
+            <tr><td><strong>Time travel</strong></td><td>Query the table as it was at an earlier version or timestamp</td><td><code>VERSION AS OF n</code> / <code>TIMESTAMP AS OF '…'</code></td></tr>
+            <tr><td><strong>Schema enforcement</strong></td><td>Rejects writes whose schema doesn't match</td><td>On by default</td></tr>
+            <tr><td><strong>Schema evolution</strong></td><td>Adds new columns on write instead of failing</td><td><code>.option("mergeSchema","true")</code></td></tr>
+            <tr><td><strong>Change Data Feed (CDF)</strong></td><td>Read row-level inserts/updates/deletes as a stream</td><td>Enable on the table, then <code>.option("readChangeFeed","true")</code></td></tr>
+            <tr><td><strong>MERGE</strong></td><td>Upserts and SCD Type 2 in one atomic statement</td><td><code>MERGE INTO … WHEN MATCHED … WHEN NOT MATCHED</code></td></tr>
+            <tr><td><strong>Deletion vectors</strong></td><td>Marks rows deleted without rewriting whole Parquet files — much faster deletes/updates</td><td>Table property; <code>OPTIMIZE</code> later materializes the changes</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="maintenance">Table maintenance: OPTIMIZE, VACUUM, V-Order, Z-Order</h3>
+      <p>Four operations that are constantly confused with each other. Learn the one-line distinction for each:</p>
+      <div class="table-wrap">
+        <table class="tbl t-teal">
+          <thead><tr><th>Operation</th><th>Problem it solves</th><th>What it actually does</th></tr></thead>
+          <tbody>
+            <tr><td><strong>OPTIMIZE</strong></td><td>Too many small files</td><td><strong>Compacts</strong> small Parquet files into fewer larger ones. Does <em>not</em> delete anything.</td></tr>
+            <tr><td><strong>VACUUM</strong></td><td>Storage bloat from old file versions</td><td><strong>Deletes</strong> data files no longer referenced by the log, beyond the retention window. Does <em>not</em> compact anything.</td></tr>
+            <tr><td><strong>V-Order</strong></td><td>General read speed</td><td>Fabric-specific <strong>write-time</strong> optimization — sorting/encoding <em>inside</em> Parquet files for fast reads by all Fabric engines.</td></tr>
+            <tr><td><strong>Z-Order</strong></td><td>Slow filtered queries on specific columns</td><td>Co-locates related values <strong>across</strong> files so data skipping can prune more. Applied as part of OPTIMIZE.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="code-block"><span class="lang">Spark SQL</span><pre class="code"><code><span class="cm">-- Compact small files</span>
+OPTIMIZE gold_sales;
+
+<span class="cm">-- Compact AND co-locate by the columns you filter on most</span>
+OPTIMIZE gold_sales ZORDER BY (region, product_category);
+
+<span class="cm">-- Remove unreferenced files older than the retention window (default 7 days / 168 h)</span>
+VACUUM gold_sales;
+VACUUM gold_sales RETAIN 168 HOURS;</code></pre></div>
+
+      <div class="callout exam">
+        <p class="ct-title">Caveat — the four classic Delta traps</p>
+        <p><strong>1.</strong> OPTIMIZE ≠ VACUUM: one compacts, the other deletes. A "too many small files" symptom is always OPTIMIZE.<br>
+        <strong>2.</strong> VACUUM's default retention is <strong>7 days (168 hours)</strong>. Vacuuming below that <strong>breaks time travel</strong> to those versions and can break concurrent readers — Spark blocks it unless you override the retention-check safety setting.<br>
+        <strong>3.</strong> V-Order is <em>within</em> files at write time; Z-Order is <em>across</em> files at optimize time. They are complementary, not alternatives.<br>
+        <strong>4.</strong> V-Order costs write throughput to buy read throughput. For write-heavy bronze/staging tables it is legitimate to <strong>disable</strong> it; keep it on for gold tables that get read constantly.</p>
+      </div>
+      <div class="callout tip">
+        <p class="ct-title">Don't over-partition</p>
+        <p>Partitioning helps only when partitions are large and queries filter on the partition column. Partitioning a modest table by a high-cardinality column (customer ID, timestamp to the second) creates the small-file problem you were trying to avoid. Fabric's guidance: prefer <strong>Z-Order / V-Order plus OPTIMIZE</strong>, and partition only large tables on a low-cardinality column such as date.</p>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="shortcuts"><span class="num">0.7</span> OneLake shortcuts</h2>
+
+      <p>A shortcut is a <strong>pointer</strong>: it makes data stored elsewhere appear as a folder or table inside your Lakehouse without copying it. The data stays at the source and is read live.</p>
+
+      <div class="table-wrap">
+        <table class="tbl">
+          <thead><tr><th>Shortcut target</th><th>Type</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Another OneLake location</strong></td><td>Internal</td><td>Cross-workspace and cross-item; lowest latency</td></tr>
+            <tr><td><strong>ADLS Gen2</strong></td><td>External</td><td><code>abfss://</code>; org account or SAS/service principal</td></tr>
+            <tr><td><strong>Amazon S3 / S3-compatible</strong></td><td>External</td><td>Cross-cloud</td></tr>
+            <tr><td><strong>Google Cloud Storage</strong></td><td>External</td><td>Cross-cloud</td></tr>
+            <tr><td><strong>Dataverse</strong></td><td>External</td><td>Power Platform data</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout exam">
+        <p class="ct-title">Caveat — what shortcuts do and don't do</p>
+        <p>Shortcuts are <strong>not copies</strong>, so: the source system's permissions apply <em>in addition to</em> OneLake permissions; external shortcuts carry <strong>higher read latency</strong> than native OneLake data; and shortcut data is <strong>not touched by OPTIMIZE or VACUUM</strong> — maintenance is the source's responsibility. Writes through a shortcut are possible for some target types but the classic exam framing is read-oriented virtualization.</p>
+      </div>
+      <div class="callout note">
+        <p class="ct-title">Shortcut vs mirroring vs copy — one line each</p>
+        <p><strong>Shortcut</strong> = point at the data where it lives, read it live, nothing is duplicated.<br>
+        <strong>Mirroring</strong> = continuously replicate a source database into OneLake as Delta via CDC, near real-time, one-way.<br>
+        <strong>Copy (pipeline / Copy job)</strong> = move a bounded batch of data on a schedule or trigger.</p>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="languages"><span class="num">0.8</span> Languages and where they apply</h2>
+
+      <div class="table-wrap">
+        <table class="tbl t-purple">
+          <thead><tr><th>Language</th><th>Where it runs</th><th>Reach for it when…</th></tr></thead>
+          <tbody>
+            <tr><td><strong>PySpark</strong></td><td>Notebooks, Spark job definitions</td><td>Large-scale or complex transformation, ML, streaming with joins</td></tr>
+            <tr><td><strong>Spark SQL</strong></td><td>Notebooks (<code>%%sql</code>)</td><td>Set-based logic over Lakehouse tables without leaving Spark</td></tr>
+            <tr><td><strong>T-SQL</strong></td><td>Warehouse (read/write), SQL analytics endpoint (read-only)</td><td>Warehouse transforms, stored procedures, RLS/CLS/DDM</td></tr>
+            <tr><td><strong>KQL</strong></td><td>Eventhouse / KQL database, KQL querysets</td><td>Time-series, logs, real-time aggregation and alerting</td></tr>
+            <tr><td><strong>M (Power Query)</strong></td><td>Dataflow Gen2</td><td>Low-code transformation and broad SaaS connectivity</td></tr>
+            <tr><td><strong>DAX</strong></td><td>Semantic models</td><td>BI measures and semantic-model RLS</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout tip">
+        <p class="ct-title">What the exam actually asks</p>
+        <p>You are tested on <strong>choosing</strong> the language far more than writing it. "Transform data already landing in an Eventhouse" → <strong>KQL</strong>. "Analyst needs no-code with 150+ connectors" → <strong>Dataflow Gen2 (M)</strong>. "Stored procedure required" → <strong>T-SQL in a Warehouse</strong>. Read the persona and the constraint in the stem before you look at the options.</p>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="vs-azure"><span class="num">0.9</span> Fabric vs the Azure data stack</h2>
+
+      <div class="table-wrap">
+        <table class="tbl t-slate">
+          <thead><tr><th>Dimension</th><th>Microsoft Fabric</th><th>Azure Synapse + Data Factory</th></tr></thead>
+          <tbody>
+            <tr><td>Service model</td><td><strong>SaaS</strong> — nothing to provision</td><td><strong>PaaS</strong> — you create and manage resources</td></tr>
+            <tr><td>Storage</td><td>OneLake, automatic, one per tenant</td><td>ADLS Gen2 accounts you provision</td></tr>
+            <tr><td>Compute</td><td>Shared capacity in CUs (F SKUs)</td><td>Dedicated SQL/Spark pools, integration runtimes</td></tr>
+            <tr><td>Real-time</td><td>Eventstream + Eventhouse, built in</td><td>Event Hubs + Stream Analytics, separate services</td></tr>
+            <tr><td>Portal</td><td>One (<code>app.fabric.microsoft.com</code>)</td><td>Azure portal + Synapse Studio + ADF Studio</td></tr>
+            <tr><td>Governance</td><td>Built-in, with Purview integration</td><td>Purview deployed and wired up separately</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="scenarios">Scenario quick reference</h2>
+      <div class="table-wrap">
+        <table class="tbl">
+          <thead><tr><th>Scenario</th><th>Deciding constraint</th><th>Answer</th></tr></thead>
+          <tbody>
+            <tr><td>Analysts must write stored procedures</td><td>T-SQL read/write</td><td><strong>Warehouse</strong></td></tr>
+            <tr><td>Engineers need PySpark and SQL over the same tables</td><td>Mixed engine</td><td><strong>Lakehouse</strong></td></tr>
+            <tr><td>Millions of IoT events, sub-second query</td><td>Time-series at scale</td><td><strong>Eventhouse / KQL database</strong></td></tr>
+            <tr><td>Query S3 data without copying it</td><td>No data movement</td><td><strong>OneLake shortcut</strong></td></tr>
+            <tr><td>Keep a near real-time replica of Azure SQL DB</td><td>Continuous CDC</td><td><strong>Mirroring</strong></td></tr>
+            <tr><td>Free-licensed users must view reports</td><td>Licensing threshold</td><td><strong>F64 or higher capacity</strong></td></tr>
+            <tr><td>Reads slowed by thousands of tiny files</td><td>Small-file problem</td><td><strong>OPTIMIZE</strong></td></tr>
+            <tr><td>Storage cost growing from old versions</td><td>Unreferenced files</td><td><strong>VACUUM</strong> (respect 7-day retention)</td></tr>
+            <tr><td>Need yesterday's version of a table</td><td>Point-in-time read</td><td><strong>Time travel</strong> (<code>VERSION AS OF</code>)</td></tr>
+            <tr><td>Reusable library set across notebooks</td><td>Dependency management</td><td><strong>Environment</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="pager">
+        <a class="prev" href="../"><div class="pg-dir">← Previous</div><div class="pg-title">Home</div></a>
+        <a class="next" href="../domain-1-implement-manage/"><div class="pg-dir">Next →</div><div class="pg-title">Domain 1 · Implement &amp; manage</div></a>
+      </div>
+
+    </main>
+  </div>
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

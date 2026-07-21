@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Domain 3 · Monitor &amp; Optimize an Analytics Solution — DP-700</title>
+  <meta name="description" content="DP-700 Domain 3 study notes: monitoring hub, workspace monitoring, Activator alerts, semantic model refresh, error resolution for pipelines, Dataflow Gen2, notebooks, Eventhouse, Eventstream, T-SQL and shortcuts, plus optimization of Lakehouse tables, pipelines, Warehouse, Eventhouse, Spark and queries.">
+  <meta name="author" content="Marco Grimaldi">
+  <link rel="canonical" href="https://marcogrimaldi29.com/dp-700-study-notes-v2/domain-3-monitor-optimize/">
+  <meta name="robots" content="index, follow">
+  <meta name="theme-color" content="#d83b01">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="DP-700 Study Notes v2">
+  <meta property="og:title" content="DP-700 Domain 3 · Monitor and optimize an analytics solution">
+  <meta property="og:description" content="Monitoring, alerting, error triage across seven item types, and performance optimization across every Fabric engine.">
+  <meta property="og:url" content="https://marcogrimaldi29.com/dp-700-study-notes-v2/domain-3-monitor-optimize/">
+  <meta property="og:image" content="https://marcogrimaldi29.com/dp-700-study-notes-v2/assets/images/site-mark-no-bg.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="DP-700 Domain 3 · Monitor and optimize an analytics solution">
+  <meta name="twitter:description" content="Monitoring, alerting, error triage and performance optimization in Microsoft Fabric.">
+  <meta name="twitter:image" content="https://marcogrimaldi29.com/dp-700-study-notes-v2/assets/images/site-mark-no-bg.png">
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@graph":[{"@type":"TechArticle","headline":"DP-700 Domain 3 · Monitor and optimize an analytics solution","description":"Monitoring, alerting, error triage across seven item types, and performance optimization across every Fabric engine.","inLanguage":"en","url":"https://marcogrimaldi29.com/dp-700-study-notes-v2/domain-3-monitor-optimize/","author":{"@type":"Person","name":"Marco Grimaldi","url":"https://marcogrimaldi29.com/"},"isPartOf":"https://marcogrimaldi29.com/dp-700-study-notes-v2/"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"DP-700 Study Notes v2","item":"https://marcogrimaldi29.com/dp-700-study-notes-v2/"},{"@type":"ListItem","position":2,"name":"Domain 3 · Monitor and optimize","item":"https://marcogrimaldi29.com/dp-700-study-notes-v2/domain-3-monitor-optimize/"}]}]}
+  </script>
+  <link rel="icon" href="../assets/images/site-mark-no-bg.png">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body data-page="monitor">
+  <div class="layout" style="--accent:var(--d3)">
+
+    <aside class="toc"><h4>On this page</h4><nav id="toc-list"></nav></aside>
+
+    <main class="content">
+      <div class="page-head">
+        <div class="kicker">Domain 3 · 30–35%</div>
+        <h1>Monitor and optimize an analytics solution</h1>
+        <p>The operations third of the exam: knowing where to look when something breaks, reading the error message correctly, and applying the right lever — not just the biggest one — when something is slow.</p>
+      </div>
+
+      <div class="card">
+        <strong>Three objectives:</strong>
+        <ul style="margin-bottom:0">
+          <li><a href="#monitor">3.1 Monitor Fabric items</a> — ingestion, transformation, semantic model refresh, alerts</li>
+          <li><a href="#errors">3.2 Identify and resolve errors</a> — pipelines, Dataflow Gen2, notebooks, Eventhouse, Eventstream, T-SQL, shortcuts</li>
+          <li><a href="#optimize">3.3 Optimize performance</a> — Lakehouse tables, pipelines, Warehouse, Eventstream/Eventhouse, Spark, queries</li>
+        </ul>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="monitor"><span class="num">3.1</span> Monitor Fabric items</h2>
+
+      <h3 id="where-to-look">Know your monitoring surfaces</h3>
+      <p>Half of this objective is simply picking the right tool. Four surfaces, four different questions:</p>
+      <div class="table-wrap">
+        <table class="tbl t-red">
+          <thead><tr><th>Surface</th><th>Answers</th><th>Scope</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Monitoring hub</strong> (Monitor)</td><td>"Did it run, how long did it take, why did it fail?"</td><td>All runs across items you can access — pipelines, notebooks, Spark, dataflows, refreshes</td></tr>
+            <tr><td><strong>Capacity Metrics app</strong></td><td>"What is burning CUs? Are we throttled?"</td><td>Capacity-wide consumption, overloads, carryforward</td></tr>
+            <tr><td><strong>Workspace monitoring</strong></td><td>"Give me queryable logs and metrics I can build alerts on"</td><td>Per-workspace diagnostic logs landed into an Eventhouse, queried with KQL</td></tr>
+            <tr><td><strong>Purview audit log</strong></td><td>"Who accessed, shared or exported this?"</td><td>Tenant-wide security/compliance events</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout note">
+        <p class="ct-title">Workspace monitoring</p>
+        <p>When enabled on a workspace, Fabric provisions a <strong>monitoring Eventhouse</strong> and streams diagnostic logs and metrics into it. Because the data lands in a KQL database, you can query it with KQL, build real-time dashboards on it, and attach <strong>Activator</strong> rules — which is how you get genuinely custom alerting rather than the built-in per-item notifications.</p>
+      </div>
+
+      <h3 id="monitor-ingestion">Monitoring data ingestion</h3>
+      <div class="table-wrap">
+        <table class="tbl t-red">
+          <thead><tr><th>What</th><th>Where</th><th>Signals that matter</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Pipeline Copy activity</strong></td><td>Monitoring hub → run → activity output</td><td><code>rowsRead</code>, <code>rowsCopied</code>, <code>rowsSkipped</code>, throughput, duration, used DIUs, parallel copies</td></tr>
+            <tr><td><strong>Copy job</strong></td><td>The Copy job item's run history</td><td>Rows moved, incremental watermark position</td></tr>
+            <tr><td><strong>Dataflow Gen2</strong></td><td>Refresh history on the item</td><td>Per-query duration and row counts, staging vs destination phases</td></tr>
+            <tr><td><strong>Mirroring</strong></td><td>The mirrored database's replication view</td><td><strong>Replication lag</strong>, rows replicated, per-table status, stopped/errored tables</td></tr>
+            <tr><td><strong>Eventstream</strong></td><td>Eventstream runtime view / data insights</td><td>Incoming vs outgoing events, <strong>backlog</strong>, errors per destination</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout exam">
+        <p class="ct-title">Caveat — read rows read against rows written</p>
+        <p>A Copy activity that <strong>succeeds</strong> can still be wrong. If <code>rowsRead</code> ≠ <code>rowsCopied</code>, rows were filtered, skipped by fault tolerance, or dropped by type incompatibility. When a question says "the pipeline succeeded but the target has fewer rows than expected", check <strong>rowsSkipped</strong> and the fault-tolerance log — do not chase permissions.</p>
+      </div>
+
+      <h3 id="monitor-transform">Monitoring data transformation</h3>
+      <div class="table-wrap">
+        <table class="tbl t-red">
+          <thead><tr><th>Surface</th><th>Shows</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Monitoring hub → Spark run</strong></td><td>Duration, status, submitter, attached Lakehouse, executor allocation</td></tr>
+            <tr><td><strong>Spark UI — Jobs</strong></td><td>Jobs and their stages; where the wall-clock time went</td></tr>
+            <tr><td><strong>Spark UI — Stages</strong></td><td>Task duration distribution (max vs median exposes <strong>skew</strong>), shuffle read/write, <strong>spill</strong></td></tr>
+            <tr><td><strong>Spark UI — SQL/DataFrame</strong></td><td>The physical plan: join strategies, scans, exchanges, AQE rewrites</td></tr>
+            <tr><td><strong>Spark UI — Executors</strong></td><td>Per-executor memory, disk, GC time, failed tasks</td></tr>
+            <tr><td><strong>Spark UI — Storage</strong></td><td>Cached DataFrames and how much actually fit in memory</td></tr>
+            <tr><td><strong>Query insights (Warehouse)</strong></td><td>Historical T-SQL query performance — see <a href="#warehouse-opt">Warehouse optimization</a></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout tip">
+        <p class="ct-title">Reading the Stages tab for skew</p>
+        <p>In a healthy stage, task durations cluster tightly. If the <strong>max task duration is far above the median</strong> and one task processes far more input, you have <strong>data skew</strong> — a few keys dominate a partition. That is a different fix from "the whole job is slow", so the exam uses this signal to separate skew answers from cluster-size answers.</p>
+      </div>
+
+      <h3 id="monitor-refresh">Monitoring semantic model refresh</h3>
+      <ul>
+        <li><strong>Refresh history</strong> on the semantic model shows each refresh's start, duration, status and error detail.</li>
+        <li>The <strong>monitoring hub</strong> lists refreshes alongside other runs so you can correlate them with the pipeline that triggered them.</li>
+        <li><strong>Refresh failure notifications</strong> can be emailed to the owner and to additional contacts from the model's settings.</li>
+        <li><strong>Direct Lake</strong> models avoid scheduled refresh for data — they read Delta directly — but still <em>reframe</em> to pick up new data, and can <strong>fall back to DirectQuery</strong> when a guardrail is exceeded, which shows up as a sudden performance change rather than an error.</li>
+      </ul>
+      <div class="callout exam">
+        <p class="ct-title">Caveat — refresh a Direct Lake model?</p>
+        <p>Direct Lake does not import data, so "schedule a refresh to load the new rows" is the wrong answer for it — new Delta commits are picked up by reframing. If a Direct Lake report suddenly gets slower with no error, suspect <strong>DirectQuery fallback</strong> caused by exceeding a capacity guardrail, or an unoptimized (small-file-heavy) Delta table underneath.</p>
+      </div>
+
+      <h3 id="alerts">Configuring alerts</h3>
+      <div class="table-wrap">
+        <table class="tbl t-red">
+          <thead><tr><th>Alert type</th><th>Set up where</th><th>Fires on</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Activator rule</strong></td><td>Activator item, or "Set alert" on a real-time dashboard / Power BI visual / Eventstream</td><td>A data condition — value crosses a threshold, changes, or stays in a state</td></tr>
+            <tr><td><strong>Job failure notification</strong></td><td>Pipeline settings → notification activity, or item settings</td><td>Run failure or completion — email or Teams</td></tr>
+            <tr><td><strong>Refresh failure notification</strong></td><td>Semantic model / dataflow settings</td><td>Refresh failure, to owner + contacts</td></tr>
+            <tr><td><strong>Capacity notification</strong></td><td>Admin portal → capacity settings</td><td>Capacity approaching or exceeding its limit</td></tr>
+            <tr><td><strong>KQL-based alert</strong></td><td>Activator on a KQL queryset / workspace monitoring Eventhouse</td><td>Any condition you can express in KQL</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout note">
+        <p class="ct-title">Activator in one line</p>
+        <p><strong>Activator</strong> (previously Data Activator / Reflex) is Fabric's no-code detect-and-act engine: it watches a stream, a KQL query or a report visual, evaluates rules on <em>objects</em>, and triggers an action — email, Teams message, or <strong>run a Fabric item such as a pipeline or notebook</strong>. When a question asks for "automatically start the pipeline when X happens in the data", Activator is the mechanism.</p>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="errors"><span class="num">3.2</span> Identify and resolve errors</h2>
+
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+flowchart TD
+  F["Run failed"] --> H["Monitoring hub<br/>find the failed run and activity"]
+  H --> C{"Read the error class"}
+  C -->|"Auth / credentials"| A["Refresh connection<br/>check service principal, expired secret"]
+  C -->|"Network / gateway"| N["Gateway offline or unreachable<br/>firewall, private endpoint"]
+  C -->|"Schema / type"| S["Mapping mismatch<br/>fix mapping or cast explicitly"]
+  C -->|"Timeout"| T["Raise timeout, add parallelism<br/>reduce batch size"]
+  C -->|"Capacity / throttling"| K["Capacity Metrics app<br/>scale, reschedule, reduce concurrency"]
+  C -->|"Permission"| P["Workspace role, item permission<br/>source-side IAM"]
+        </div>
+        <div class="mm-cap">Triage flow: always start in the monitoring hub, classify the error, then act on the class rather than guessing.</div>
+      </div>
+
+      <h3 id="pipeline-errors">Pipeline errors</h3>
+      <div class="table-wrap">
+        <table class="tbl t-red">
+          <thead><tr><th>Symptom / error</th><th>Cause</th><th>Fix</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Invalid data source credentials</strong></td><td>Expired secret, rotated password, deleted service principal</td><td>Update the connection; prefer workspace identity or managed identity over stored secrets</td></tr>
+            <tr><td><strong>Copy activity failed — type mismatch</strong></td><td>Source and sink column types incompatible</td><td>Fix the explicit column mapping, cast in the source query, or enable fault tolerance to skip bad rows</td></tr>
+            <tr><td><strong>Activity timed out</strong></td><td>Long-running source query or oversized batch</td><td>Raise the activity timeout, filter the source, increase parallel copies</td></tr>
+            <tr><td><strong>Gateway unreachable / offline</strong></td><td>On-premises data gateway service stopped or blocked</td><td>Restart the gateway, verify outbound connectivity and cluster health</td></tr>
+            <tr><td><strong>Capacity throttled / rejected</strong></td><td>CU exhaustion on the capacity</td><td>Capacity Metrics app → scale up, move the workspace, or reschedule heavy jobs</td></tr>
+            <tr><td><strong>Sink table locked / concurrent write</strong></td><td>Two writers targeting the same Delta table</td><td>Serialize the writes; Delta's optimistic concurrency will fail one of them</td></tr>
+            <tr><td><strong>Expression evaluation failed</strong></td><td>Null or wrong-typed value in a dynamic expression</td><td>Guard with <code>coalesce()</code>/<code>if()</code>; check the upstream activity's actual output shape</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout tip">
+        <p class="ct-title">Design pipelines to fail well</p>
+        <p>Use <strong>activity dependency conditions</strong> (Success / Failure / Completion / Skipped) to build error paths, set <strong>retry count and interval</strong> on transient-prone activities, and add a <strong>Fail</strong> activity with a clear message so downstream monitoring shows the business reason rather than a generic error.</p>
+      </div>
+
+      <h3 id="dataflow-errors">Dataflow Gen2 errors</h3>
+      <div class="table-wrap">
+        <table class="tbl t-red">
+          <thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Out of memory / resource exceeded</strong></td><td>Heavy transformation evaluated in the mashup engine</td><td><strong>Enable staging</strong> so the work is pushed down; split the dataflow; reduce the data pulled</td></tr>
+            <tr><td><strong>Evaluation timeout</strong></td><td>Too many steps, or query folding broken</td><td>Restore <strong>query folding</strong> — move filters earlier, avoid steps that break folding</td></tr>
+            <tr><td><strong>Data source error on refresh</strong></td><td>Credentials expired or source unavailable</td><td>Re-authenticate the connection; check gateway for on-prem sources</td></tr>
+            <tr><td><strong>Destination write failed</strong></td><td>Target missing, no permission, or schema conflict</td><td>Verify the destination exists, check the update method (append vs replace) and column mapping</td></tr>
+            <tr><td><strong>Duplicate column names</strong></td><td>Collision after a merge/expand</td><td>Rename before combining</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout exam">
+        <p class="ct-title">Caveat — query folding is the real lever</p>
+        <p>When a Dataflow Gen2 folds, the transformation is translated into a query the <strong>source</strong> executes; when folding breaks, everything is pulled into the mashup engine and processed locally — which is where memory and timeout failures come from. Filters and column removal placed <em>early</em> usually fold; custom functions, some type changes and index columns usually break it. "Dataflow is slow / runs out of memory" → <strong>staging plus restoring folding</strong>, not a bigger capacity.</p>
+      </div>
+
+      <h3 id="notebook-errors">Notebook and Spark errors</h3>
+      <div class="table-wrap">
+        <table class="tbl t-red">
+          <thead><tr><th>Error</th><th>Cause</th><th>Fix</th></tr></thead>
+          <tbody>
+            <tr><td><strong>OutOfMemoryError (executor)</strong></td><td>Partition too large, skew, or a broadcast that was too big</td><td>Repartition, fix skew, lower the broadcast threshold, larger node size</td></tr>
+            <tr><td><strong>OutOfMemoryError (driver)</strong></td><td><code>collect()</code> / <code>toPandas()</code> pulling a huge result to the driver</td><td>Aggregate first, or write to a table instead of collecting</td></tr>
+            <tr><td><strong>AnalysisException: Table or view not found</strong></td><td>No default Lakehouse attached, wrong name, or endpoint metadata lag</td><td>Attach the Lakehouse, use a fully qualified name or ABFSS path</td></tr>
+            <tr><td><strong>ConcurrentAppendException / ConcurrentModification</strong></td><td>Two jobs writing the same Delta table</td><td>Serialize writers, or partition so they touch disjoint files</td></tr>
+            <tr><td><strong>FileNotFoundException on read</strong></td><td>Files removed by <strong>VACUUM</strong> while a long query or stale snapshot referenced them</td><td>Re-read the table; do not vacuum below the retention window</td></tr>
+            <tr><td><strong>Session expired / timed out</strong></td><td>Idle session reclaimed</td><td>Re-run; adjust session timeout; use high concurrency mode</td></tr>
+            <tr><td><strong>ModuleNotFoundError</strong></td><td>Library not installed in the environment</td><td>Add it to the <strong>Environment</strong> (persistent) or <code>%pip install</code> (session-only)</td></tr>
+            <tr><td><strong>Py4JJavaError</strong></td><td>Wrapper around a JVM-side failure</td><td>Read the nested stack trace and the Spark UI — the real cause is inside</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout warn">
+        <p class="ct-title">%pip install is not persistent</p>
+        <p><code>%pip install</code> lasts only for the current session. For a library every run needs — and for reproducibility across notebooks and pipeline-triggered runs — add it to an <strong>Environment</strong> and attach that environment to the notebook or workspace.</p>
+      </div>
+
+      <h3 id="eventhouse-errors">Eventhouse errors</h3>
+      <div class="table-wrap">
+        <table class="tbl t-red">
+          <thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Ingestion failures</strong></td><td>Schema or format mismatch between events and the table</td><td>Check the <strong>ingestion mapping</strong>; inspect <code>.show ingestion failures</code></td></tr>
+            <tr><td><strong>Data arrives late (minutes)</strong></td><td>Default <strong>batching</strong> ingestion policy aggregating small batches</td><td>Tune the batching policy or enable <strong>streaming ingestion</strong> for low latency</td></tr>
+            <tr><td><strong>Query timeout / memory error</strong></td><td>Unbounded scan, expensive join, missing time filter</td><td>Filter on the time column first, reduce the range, pre-aggregate with a materialized view</td></tr>
+            <tr><td><strong>Old data missing</strong></td><td><strong>Retention policy</strong> soft-deleted it</td><td>Extend retention — data past retention is gone, not merely uncached</td></tr>
+            <tr><td><strong>Historical queries slow</strong></td><td>Data outside the <strong>hot cache</strong> window</td><td>Extend the caching policy for the period you query</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout exam">
+        <p class="ct-title">Caveat — caching policy vs retention policy</p>
+        <p><strong>Retention</strong> decides how long data <em>exists</em>. <strong>Caching (hot cache)</strong> decides how much of it is held on fast local SSD. Data past its cache window is still queryable, just slower; data past its retention window is <strong>deleted</strong>. "Queries on last year's data are slow" → extend <em>caching</em>. "Last year's data is gone" → <em>retention</em> was too short. Hot cache should always be ≤ retention.</p>
+      </div>
+
+      <h3 id="eventstream-errors">Eventstream errors</h3>
+      <div class="table-wrap">
+        <table class="tbl t-red">
+          <thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Source connection failure</strong></td><td>Bad connection string, expired SAS, wrong consumer group</td><td>Re-create the connection; give the Eventstream its <strong>own consumer group</strong></td></tr>
+            <tr><td><strong>Deserialization errors</strong></td><td>Events don't match the declared format/schema</td><td>Correct the data format (JSON/Avro/CSV) and the schema</td></tr>
+            <tr><td><strong>Backlog / input lag growing</strong></td><td>Ingress exceeds processing throughput</td><td>Simplify the processing graph, increase source partitions, reduce destination fan-out</td></tr>
+            <tr><td><strong>Destination write failure</strong></td><td>Target unavailable, permission denied, or schema conflict</td><td>Check destination status and permissions; validate the schema mapping</td></tr>
+            <tr><td><strong>Events missing downstream</strong></td><td>A filter operator dropping more than intended</td><td>Inspect the processor preview at each operator</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout note">
+        <p class="ct-title">Consumer groups</p>
+        <p>Two readers sharing one Event Hubs consumer group compete for the same partitions and each sees only part of the data. Every independent consumer — each Eventstream, each Spark job — should have <strong>its own consumer group</strong>. "Some events are missing and another job started recently" is this.</p>
+      </div>
+
+      <h3 id="tsql-errors">T-SQL errors</h3>
+      <div class="table-wrap">
+        <table class="tbl t-red">
+          <thead><tr><th>Error</th><th>Cause</th><th>Fix</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Invalid object name</strong></td><td>Wrong schema, wrong database, or endpoint metadata not yet synced</td><td>Qualify as <code>database.schema.object</code>; refresh the SQL endpoint metadata</td></tr>
+            <tr><td><strong>Cannot INSERT/UPDATE — read-only</strong></td><td>Writing through a <strong>Lakehouse SQL analytics endpoint</strong></td><td>Write with Spark, or move the table to a <strong>Warehouse</strong></td></tr>
+            <tr><td><strong>Permission denied on object/column</strong></td><td>Missing GRANT, or an explicit DENY from CLS</td><td>Grant the needed permission; remember <strong>DENY always wins</strong></td></tr>
+            <tr><td><strong>Conversion failed</strong></td><td>Implicit conversion of incompatible types</td><td>Explicit <code>CAST</code>/<code>TRY_CAST</code>; fix upstream typing</td></tr>
+            <tr><td><strong>Unsupported feature / syntax</strong></td><td>Fabric Warehouse T-SQL is a subset — identity columns, some constraints, <code>MERGE</code> nuances, triggers</td><td>Use a supported pattern (CTAS, explicit key generation)</td></tr>
+            <tr><td><strong>Query rejected / long queue</strong></td><td>Capacity throttling</td><td>Capacity Metrics app; reduce concurrency or scale</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout exam">
+        <p class="ct-title">Caveat — constraints are not enforced</p>
+        <p>Fabric Warehouse supports <strong>PRIMARY KEY / UNIQUE / FOREIGN KEY only as <code>NOT ENFORCED</code> metadata</strong>. They inform the optimizer but do <strong>not</strong> stop you inserting duplicates or orphans. If a question asks how to guarantee uniqueness, the answer is to <strong>enforce it in the load logic</strong> (MERGE on the key, dedupe before insert), not to add a constraint.</p>
+      </div>
+
+      <h3 id="shortcut-errors">OneLake shortcut errors</h3>
+      <div class="table-wrap">
+        <table class="tbl t-red">
+          <thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Access denied through the shortcut</strong></td><td>Source-side credentials expired, or the caller lacks source permission — <strong>both</strong> layers apply</td><td>Update the connection; grant access at the source (S3 IAM, ADLS RBAC/ACL)</td></tr>
+            <tr><td><strong>Target not found / broken shortcut</strong></td><td>Source path moved, renamed or deleted</td><td>Re-create the shortcut against the current path</td></tr>
+            <tr><td><strong>Shortcut appears but has no tables</strong></td><td>Target isn't a valid Delta folder, or was created under <code>Files/</code> instead of <code>Tables/</code></td><td>Point at a proper Delta table folder under <code>Tables/</code></td></tr>
+            <tr><td><strong>Queries are slow</strong></td><td>Cross-service/cross-cloud latency, or chained shortcuts</td><td>Use query acceleration (RTI), mirror the data, or copy it locally</td></tr>
+            <tr><td><strong>Stale or unexpected schema</strong></td><td>Source schema changed underneath</td><td>Refresh metadata; re-create the shortcut</td></tr>
+            <tr><td><strong>Blocked from external tools</strong></td><td>OneLake external-access setting disabled</td><td>Re-enable at tenant/workspace level (see <a href="../domain-1-implement-manage/#onelake-settings">Domain 1</a>)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="optimize"><span class="num">3.3</span> Optimize performance</h2>
+
+      <h3 id="lakehouse-opt">Optimizing a Lakehouse table</h3>
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+flowchart TD
+  S([Lakehouse table is slow]) --> Q1{Symptom}
+  Q1 -->|"Thousands of tiny files"| O["OPTIMIZE<br/>compact"]
+  Q1 -->|"Filtered queries scan everything"| Z["OPTIMIZE ZORDER BY<br/>on the filter columns"]
+  Q1 -->|"Storage cost from old versions"| V["VACUUM<br/>respect 7-day retention"]
+  Q1 -->|"Reads slow across the board"| VO["V-Order enabled<br/>plus OPTIMIZE"]
+  Q1 -->|"Huge table, always filtered by date"| P["Partition by a<br/>low-cardinality column"]
+        </div>
+        <div class="mm-cap">Match the maintenance operation to the symptom — they are not interchangeable.</div>
+      </div>
+      <ul>
+        <li><strong>Table maintenance</strong> can be run ad hoc from the Lakehouse UI (Run OPTIMIZE / VACUUM), from Spark SQL, or scheduled in a pipeline or notebook.</li>
+        <li><strong>Auto Compaction</strong> and <strong>Optimize Write</strong> reduce the small-file problem at write time so you need fewer manual OPTIMIZE runs.</li>
+        <li>Aim for reasonably large files (roughly a few hundred MB up to ~1 GB) — that is the sweet spot for Parquet scan efficiency.</li>
+        <li><strong>Deletion vectors</strong> make deletes/updates cheap by marking rows instead of rewriting files; run OPTIMIZE periodically to materialize them.</li>
+        <li>Full detail on OPTIMIZE / VACUUM / V-Order / Z-Order is on the <a href="../fabric-foundations/#maintenance">foundations page</a>.</li>
+      </ul>
+
+      <h3 id="pipeline-opt">Optimizing a pipeline</h3>
+      <div class="table-wrap">
+        <table class="tbl t-red">
+          <thead><tr><th>Lever</th><th>How</th><th>When it helps</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Copy less</strong></td><td>Incremental instead of full; project only needed columns; filter at the source</td><td>Always the biggest win</td></tr>
+            <tr><td><strong>Parallel copy</strong></td><td>Raise degree of copy parallelism; partition the source read</td><td>Large single-table copies</td></tr>
+            <tr><td><strong>DIUs</strong></td><td>Increase Data Integration Units on the Copy activity</td><td>Throughput-bound copies</td></tr>
+            <tr><td><strong>Staged copy</strong></td><td>Enable staging</td><td>Cross-region moves, or sinks that need bulk load</td></tr>
+            <tr><td><strong>ForEach parallelism</strong></td><td>Turn off <code>isSequential</code>, tune the batch count</td><td>Many independent tables — but watch capacity</td></tr>
+            <tr><td><strong>Flatten dependencies</strong></td><td>Run independent branches concurrently instead of chaining</td><td>Long pipelines with false sequencing</td></tr>
+            <tr><td><strong>Right activity</strong></td><td>Push a set-based transform into a stored procedure or notebook instead of row-wise pipeline logic</td><td>Pipelines used as a transformation engine</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout warn">
+        <p class="ct-title">Parallelism is not free</p>
+        <p>Raising ForEach batch counts and copy parallelism consumes more CUs at once and can push the capacity into <strong>throttling</strong>, making everything slower. If the capacity is already near its limit, the fix is scheduling and scope reduction — not more concurrency.</p>
+      </div>
+
+      <h3 id="warehouse-opt">Optimizing a data warehouse</h3>
+      <div class="table-wrap">
+        <table class="tbl t-red">
+          <thead><tr><th>Technique</th><th>Detail</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Statistics</strong></td><td>Fabric auto-creates and maintains them, but you can <code>CREATE STATISTICS</code> / <code>UPDATE STATISTICS</code> manually when plans look wrong after a big load</td></tr>
+            <tr><td><strong>Correct data types</strong></td><td>Avoid oversized <code>varchar(max)</code>-style columns — they inflate memory grants and slow everything</td></tr>
+            <tr><td><strong>CTAS</strong></td><td>Preferred for large transforms; minimally logged compared with row-by-row INSERT</td></tr>
+            <tr><td><strong>Avoid <code>SELECT *</code></strong></td><td>Columnar storage means unread columns cost nothing — until you ask for them</td></tr>
+            <tr><td><strong>Result set caching</strong></td><td>Repeated identical queries served from cache</td></tr>
+            <tr><td><strong>Materialized views</strong></td><td>Pre-compute expensive aggregations and keep them current automatically</td></tr>
+            <tr><td><strong>Star schema</strong></td><td>The engine is optimized for it; deeply normalized snowflakes join poorly at scale</td></tr>
+            <tr><td><strong>NOT ENFORCED keys</strong></td><td>Declaring PK/FK (not enforced) still gives the optimizer useful cardinality information</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="code-block"><span class="lang">T-SQL · query insights</span><pre class="code"><code><span class="cm">-- Historical query performance (queryinsights schema)</span>
+SELECT TOP 20 *
+FROM   queryinsights.long_running_queries
+ORDER  BY median_total_elapsed_time_ms DESC;
+
+SELECT TOP 20 *
+FROM   queryinsights.frequently_run_queries
+ORDER  BY number_of_runs DESC;
+
+SELECT command, submit_time, total_elapsed_time_ms, status
+FROM   queryinsights.exec_requests_history
+ORDER  BY total_elapsed_time_ms DESC;
+
+<span class="cm">-- Currently executing requests (DMV)</span>
+SELECT * FROM sys.dm_exec_requests WHERE status &lt;&gt; <span class="st">'Completed'</span>;</code></pre></div>
+      <div class="callout tip">
+        <p class="ct-title">Know the three query insights views</p>
+        <p><code>exec_requests_history</code> = every request. <code>long_running_queries</code> = the slow ones, aggregated by query shape. <code>frequently_run_queries</code> = the ones worth optimizing because they run constantly. Pair them: the best optimization target is usually <em>frequently run and moderately slow</em>, not the single slowest ad-hoc query.</p>
+      </div>
+
+      <h3 id="rti-opt">Optimizing Eventstreams and Eventhouses</h3>
+      <div class="table-wrap">
+        <table class="tbl t-red">
+          <thead><tr><th>Target</th><th>Lever</th><th>Effect</th></tr></thead>
+          <tbody>
+            <tr><td rowspan="3"><strong>Eventstream</strong></td><td>Source partitioning / partition key</td><td>More parallel processing; pick a key with even distribution</td></tr>
+            <tr><td>Simplify the processor graph</td><td>Fewer operators and destinations reduce per-event cost</td></tr>
+            <tr><td>Trim the payload</td><td>Drop unused fields early with "manage fields"</td></tr>
+            <tr><td rowspan="5"><strong>Eventhouse</strong></td><td><strong>Caching (hot) policy</strong></td><td>Keeps the queried window on fast storage — the main query-latency lever</td></tr>
+            <tr><td><strong>Retention policy</strong></td><td>Controls storage cost and how far back data exists</td></tr>
+            <tr><td><strong>Materialized views</strong></td><td>Maintain aggregates incrementally so dashboards don't re-scan raw data</td></tr>
+            <tr><td><strong>Update policies</strong></td><td>Transform/route at ingestion time into a curated table (ETL at ingest)</td></tr>
+            <tr><td><strong>Partitioning &amp; batching policies</strong></td><td>Tune extent shape and ingestion batching for throughput vs latency</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="code-block"><span class="lang">KQL · policies and materialized views</span><pre class="code"><code><span class="cm">// Hot cache: keep 30 days on fast storage</span>
+.alter table SensorReadings policy caching hot = 30d
+
+<span class="cm">// Retention: keep data for one year</span>
+.alter table SensorReadings policy retention softdelete = 365d
+
+<span class="cm">// Pre-aggregate hourly so dashboards never scan raw events</span>
+.create materialized-view HourlySensorAgg on table SensorReadings
+{
+    SensorReadings
+    | summarize AvgTemp = avg(Temperature), MaxTemp = max(Temperature)
+        by bin(Timestamp, 1h), DeviceId
+}
+
+<span class="cm">// Inspect physical layout</span>
+.show table SensorReadings extents
+| summarize Extents = count(), Rows = sum(RowCount), Size = sum(OriginalSize)</code></pre></div>
+
+      <h3 id="spark-opt">Optimizing Spark performance</h3>
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+flowchart TD
+  S([Spark job is slow]) --> UI["Diagnose in the Spark UI"]
+  UI -->|"Max task time much greater than median"| SK["Data skew<br/>salt the key · AQE skew join · repartition"]
+  UI -->|"Large shuffle read/write"| SH["Reduce shuffle<br/>broadcast the small side · filter earlier"]
+  UI -->|"Spill to disk"| SP["Memory pressure<br/>more partitions · larger nodes · avoid huge broadcast"]
+  UI -->|"Long scan, few rows used"| SC["Prune<br/>predicate pushdown · partitions · Z-Order"]
+  UI -->|"Thousands of tiny input files"| SF["OPTIMIZE the table<br/>optimize write on ingest"]
+  UI -->|"Minutes before the first task"| CS["Cold start<br/>use a starter pool"]
+        </div>
+        <div class="mm-cap">Every Spark answer starts from a symptom in the Spark UI — the exam gives you that symptom in the stem.</div>
+      </div>
+      <div class="table-wrap">
+        <table class="tbl t-red">
+          <thead><tr><th>Technique</th><th>How</th><th>Use when</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Broadcast join</strong></td><td><code>broadcast(small_df)</code> or <code>autoBroadcastJoinThreshold</code></td><td>Small dimension joined to a large fact — avoids a shuffle entirely</td></tr>
+            <tr><td><strong>Adaptive Query Execution</strong></td><td>On by default in Fabric</td><td>Runtime re-planning: coalesces shuffle partitions, converts to broadcast, splits skewed joins</td></tr>
+            <tr><td><strong>Salting</strong></td><td>Add a random suffix to the hot key, join, then aggregate away</td><td>Severe skew AQE can't resolve</td></tr>
+            <tr><td><strong>Predicate pushdown / column pruning</strong></td><td>Filter and select early</td><td>Always — least data read is the cheapest optimization</td></tr>
+            <tr><td><strong>coalesce vs repartition</strong></td><td><code>coalesce(n)</code> reduces partitions without a full shuffle; <code>repartition(n)</code> shuffles for even distribution</td><td>coalesce before write; repartition to fix imbalance</td></tr>
+            <tr><td><strong>cache / persist</strong></td><td><code>df.cache()</code></td><td>A DataFrame reused several times — not for single-pass work</td></tr>
+            <tr><td><strong>Native execution engine</strong></td><td>Enable in Spark workspace settings</td><td>Broad speed-up; unsupported operators fall back silently</td></tr>
+            <tr><td><strong>Avoid Python UDFs</strong></td><td>Use built-in functions, or pandas/Arrow UDFs if unavoidable</td><td>Row-at-a-time Python UDFs break Catalyst optimization and serialize every row</td></tr>
+            <tr><td><strong>High concurrency mode</strong></td><td>Share sessions across notebooks</td><td>Many users/small jobs paying repeated start-up cost</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="code-block"><span class="lang">PySpark · common optimizations</span><pre class="code"><code><span class="kw">from</span> pyspark.sql.functions <span class="kw">import</span> broadcast, col
+
+<span class="cm"># Broadcast the small side to avoid a shuffle join</span>
+result = fact_df.join(broadcast(dim_df), <span class="st">"customer_id"</span>)
+
+<span class="cm"># Filter before joining — pushdown and less shuffle</span>
+recent = fact_df.filter(col(<span class="st">"order_date"</span>) &gt;= <span class="st">"2026-01-01"</span>)
+
+<span class="cm"># Reduce output files without a full shuffle</span>
+result.coalesce(8).write.format(<span class="st">"delta"</span>).mode(<span class="st">"overwrite"</span>).saveAsTable(<span class="st">"gold_orders"</span>)
+
+<span class="cm"># Cache only when the DataFrame is genuinely reused</span>
+base = recent.filter(col(<span class="st">"region"</span>) == <span class="st">"EU"</span>).cache()
+total, distinct_customers = base.count(), base.select(<span class="st">"customer_id"</span>).distinct().count()</code></pre></div>
+
+      <div class="callout exam">
+        <p class="ct-title">Caveat — the three Spark traps</p>
+        <p><strong>1.</strong> <code>coalesce()</code> only <em>reduces</em> partitions and avoids a full shuffle; it cannot rebalance skew. Use <code>repartition()</code> when distribution matters.<br>
+        <strong>2.</strong> Broadcasting a table that is too large moves the OOM from the executors to the driver. Broadcast the <em>genuinely small</em> side only.<br>
+        <strong>3.</strong> <strong>AQE is already on</strong> — answers proposing to manually tune <code>spark.sql.shuffle.partitions</code> or hand-fix skew are usually distractors, because AQE coalesces partitions and splits skewed joins at runtime.</p>
+      </div>
+
+      <h3 id="query-opt">Optimizing query performance</h3>
+      <div class="table-wrap">
+        <table class="tbl t-red">
+          <thead><tr><th>Principle</th><th>Applies to</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Read less</strong> — filter early, select only needed columns</td><td>Every engine</td></tr>
+            <tr><td><strong>Enable pruning</strong> — partition elimination, Z-Order, KQL time filters</td><td>Lakehouse, Warehouse, Eventhouse</td></tr>
+            <tr><td><strong>Pre-compute</strong> — materialized views, aggregate tables, gold layer</td><td>Warehouse, Eventhouse, Lakehouse</td></tr>
+            <tr><td><strong>Keep statistics fresh</strong></td><td>Warehouse</td></tr>
+            <tr><td><strong>Right-size files</strong> — OPTIMIZE, avoid over-partitioning</td><td>Lakehouse, Direct Lake models</td></tr>
+            <tr><td><strong>Join order and strategy</strong> — small side broadcast, star schema shape</td><td>Spark, Warehouse</td></tr>
+            <tr><td><strong>Avoid row-by-row logic</strong> — set-based over cursors/UDFs</td><td>Warehouse, Spark</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="scenarios">Scenario quick reference</h2>
+      <div class="table-wrap">
+        <table class="tbl">
+          <thead><tr><th>Scenario</th><th>Deciding constraint</th><th>Answer</th></tr></thead>
+          <tbody>
+            <tr><td>Find why last night's pipeline failed</td><td>Run history</td><td><strong>Monitoring hub</strong></td></tr>
+            <tr><td>Find which item is exhausting the capacity</td><td>CU consumption</td><td><strong>Capacity Metrics app</strong></td></tr>
+            <tr><td>Prove who exported a dataset</td><td>Security forensics</td><td><strong>Purview audit log</strong></td></tr>
+            <tr><td>Custom alerting on queryable Fabric logs</td><td>KQL over diagnostics</td><td><strong>Workspace monitoring + Activator</strong></td></tr>
+            <tr><td>Start a pipeline when a metric crosses a threshold</td><td>Detect and act</td><td><strong>Activator rule</strong></td></tr>
+            <tr><td>Copy succeeded but rows are missing</td><td>Silent filtering</td><td><strong>Compare rowsRead / rowsCopied / rowsSkipped</strong></td></tr>
+            <tr><td>Dataflow Gen2 out of memory</td><td>Local evaluation</td><td><strong>Enable staging + restore query folding</strong></td></tr>
+            <tr><td>Notebook fails on <code>collect()</code></td><td>Driver memory</td><td><strong>Aggregate first / write to a table</strong></td></tr>
+            <tr><td>Library missing on every scheduled run</td><td>Persistence</td><td><strong>Add to the Environment</strong>, not <code>%pip install</code></td></tr>
+            <tr><td>FileNotFoundException after maintenance</td><td>Retention</td><td><strong>VACUUM removed files still referenced</strong></td></tr>
+            <tr><td>Cannot INSERT via T-SQL</td><td>Read-only endpoint</td><td><strong>Use a Warehouse</strong> (or write with Spark)</td></tr>
+            <tr><td>Duplicates despite a primary key</td><td>Not enforced</td><td><strong>Dedupe in the load — constraints are metadata only</strong></td></tr>
+            <tr><td>KQL queries on old data are slow</td><td>Cache window</td><td><strong>Extend the caching policy</strong></td></tr>
+            <tr><td>Old KQL data has disappeared</td><td>Retention window</td><td><strong>Retention policy too short</strong></td></tr>
+            <tr><td>Eventstream backlog growing</td><td>Throughput</td><td><strong>Simplify processing, add partitions</strong></td></tr>
+            <tr><td>Some events never arrive at one consumer</td><td>Shared reader</td><td><strong>Give each consumer its own consumer group</strong></td></tr>
+            <tr><td>One Spark task runs 20× longer than the rest</td><td>Skew</td><td><strong>Salt the key / rely on AQE skew join</strong></td></tr>
+            <tr><td>Slow join, one table is tiny</td><td>Shuffle avoidance</td><td><strong>Broadcast join</strong></td></tr>
+            <tr><td>Thousands of small output files</td><td>Write shape</td><td><strong><code>coalesce()</code> before write + OPTIMIZE</strong></td></tr>
+            <tr><td>Which Warehouse queries to tune first</td><td>Impact</td><td><strong><code>queryinsights.frequently_run_queries</code></strong></td></tr>
+            <tr><td>Notebooks take minutes to start</td><td>Cold start</td><td><strong>Starter pool</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="pager">
+        <a class="prev" href="../domain-2-ingest-transform/"><div class="pg-dir">← Previous</div><div class="pg-title">Domain 2 · Ingest &amp; transform</div></a>
+        <a class="next" href="../exam-tips/"><div class="pg-dir">Next →</div><div class="pg-title">Exam tips &amp; caveats</div></a>
+      </div>
+
+    </main>
+  </div>
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

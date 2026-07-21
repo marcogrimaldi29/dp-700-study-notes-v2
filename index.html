@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DP-700 Study Notes v2 · Fabric Data Engineer</title>
+  <meta name="description" content="Comprehensive, exam-focused study notes for Microsoft DP-700: Implementing Data Engineering Solutions Using Microsoft Fabric. Aligned to the Skills Measured effective July 21, 2026 — with progress bars, diagrams, tables and exam caveats.">
+  <meta name="author" content="Marco Grimaldi">
+  <link rel="icon" href="assets/images/site-mark-no-bg.png">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="canonical" href="https://marcogrimaldi29.com/dp-700-study-notes-v2/">
+  <meta name="robots" content="index, follow">
+  <meta name="theme-color" content="#0f6cbd">
+  <!-- Open Graph / social -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="DP-700 Study Notes v2">
+  <meta property="og:title" content="DP-700 Study Notes v2 · Fabric Data Engineer">
+  <meta property="og:description" content="Exam-focused DP-700 study notes aligned to the Skills Measured effective July 21, 2026 — diagrams, decision tables and exam caveats.">
+  <meta property="og:url" content="https://marcogrimaldi29.com/dp-700-study-notes-v2/">
+  <meta property="og:image" content="https://marcogrimaldi29.com/dp-700-study-notes-v2/assets/images/site-mark-no-bg.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="DP-700 Study Notes v2 · Fabric Data Engineer">
+  <meta name="twitter:description" content="Exam-focused DP-700 study notes aligned to the latest Microsoft skills measured.">
+  <meta name="twitter:image" content="https://marcogrimaldi29.com/dp-700-study-notes-v2/assets/images/site-mark-no-bg.png">
+  <!-- Structured data -->
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://marcogrimaldi29.com/dp-700-study-notes-v2/#website","url":"https://marcogrimaldi29.com/dp-700-study-notes-v2/","name":"DP-700 Study Notes v2","description":"Exam-focused study notes for Microsoft DP-700: Implementing Data Engineering Solutions Using Microsoft Fabric.","inLanguage":"en","publisher":{"@id":"https://marcogrimaldi29.com/#person"}},{"@type":"Person","@id":"https://marcogrimaldi29.com/#person","name":"Marco Grimaldi","url":"https://marcogrimaldi29.com/","sameAs":["https://github.com/marcogrimaldi29","https://www.linkedin.com/in/marco-grimaldi29/"]},{"@type":"Course","name":"DP-700: Implementing Data Engineering Solutions Using Microsoft Fabric — Study Notes","description":"Free, exam-focused study notes covering the three DP-700 skill domains: implement and manage an analytics solution, ingest and transform data, and monitor and optimize an analytics solution.","url":"https://marcogrimaldi29.com/dp-700-study-notes-v2/","inLanguage":"en","provider":{"@type":"Person","name":"Marco Grimaldi","url":"https://marcogrimaldi29.com/"},"teaches":["Implement and manage an analytics solution in Microsoft Fabric","Ingest and transform batch and streaming data","Monitor and optimize an analytics solution"],"hasCourseInstance":{"@type":"CourseInstance","courseMode":"online","courseWorkload":"PT40H"}}]}
+  </script>
+</head>
+<body data-page="home">
+
+  <div class="page-wide">
+
+    <section class="hero">
+      <span class="eyebrow">Microsoft Certification · Exam DP-700</span>
+      <h1>Fabric Data Engineer Associate</h1>
+      <p>A complete, exam-focused companion to the official documentation — rebuilt around the latest <strong>Skills Measured (effective July 21, 2026)</strong>. Learn the engines, memorize the caveats, and walk into the exam ready.</p>
+      <div class="hero-meta">
+        <span>⏱ 100 min exam</span>
+        <span>✅ Pass mark: 700/1000</span>
+        <span>📚 3 skill domains</span>
+        <span>🎓 Associate level</span>
+      </div>
+    </section>
+
+    <div class="card">
+      <p class="lead" style="margin-top:0">DP-700 validates your ability to <strong>ingest and transform</strong> data, <strong>secure and manage</strong> an analytics solution, and <strong>monitor and optimize</strong> it — all inside Microsoft Fabric. It is a hands-on, decision-heavy exam: most questions ask <em>which engine, which item, which order</em> rather than "what does this do?".</p>
+      <div class="callout note" style="margin-bottom:0">
+        <p class="ct-title">How to use these notes</p>
+        <p>Start with <a href="fabric-foundations/">Fabric Foundations</a> to build the mental model (OneLake, Delta, capacities, item types), then work through the three domains in order and drill the <a href="exam-tips/">Exam Tips &amp; Caveats</a> page before test day. These notes are a <strong>companion</strong> — pair every section with hands-on practice in a Fabric trial capacity and the official Microsoft Learn modules.</p>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <p class="ct-title">What's new in this v2 rebuild</p>
+      <p>Rewritten against the <strong>July 21, 2026</strong> skills measured. The most visible change in the official outline is under <em>Configure Microsoft Fabric workspace settings</em>: <strong>Apache Airflow workspace settings</strong> is now an explicitly listed objective. Every domain page has been re-grounded, expanded with decision tables, and given exam-caveat callouts at the granularity the exam actually tests.</p>
+    </div>
+
+    <h2 class="content" style="border:0;margin-bottom:6px">Skills measured at a glance</h2>
+    <p class="lead" style="margin-top:0">All three domains carry the <strong>same 30–35% weight</strong> — there is no "safe" domain to skip. Budget your study time evenly.</p>
+
+    <div class="card">
+      <div class="weight-list">
+        <div class="weight-row" style="--accent:var(--d1)">
+          <div class="wr-top"><span class="wr-name">1 · Implement and manage an analytics solution</span><span class="wr-pct">30–35%</span></div>
+          <div class="progress"><span data-pct="33"></span></div>
+        </div>
+        <div class="weight-row" style="--accent:var(--d2)">
+          <div class="wr-top"><span class="wr-name">2 · Ingest and transform data</span><span class="wr-pct">30–35%</span></div>
+          <div class="progress"><span data-pct="33"></span></div>
+        </div>
+        <div class="weight-row" style="--accent:var(--d3)">
+          <div class="wr-top"><span class="wr-name">3 · Monitor and optimize an analytics solution</span><span class="wr-pct">30–35%</span></div>
+          <div class="progress"><span data-pct="33"></span></div>
+        </div>
+      </div>
+    </div>
+
+    <h2 class="content" style="border:0;margin-bottom:6px">Study domains</h2>
+    <div class="card-grid">
+      <a class="nav-card" href="fabric-foundations/" style="--accent:var(--d0)">
+        <span class="nc-badge">Foundations · Prerequisite</span>
+        <h3>Microsoft Fabric foundations</h3>
+        <p>OneLake, workspaces, capacities and CUs, Lakehouse vs Warehouse vs Eventhouse, Delta Lake internals, shortcuts, and the full item taxonomy.</p>
+        <span class="nc-foot">Start here →</span>
+      </a>
+      <a class="nav-card" href="domain-1-implement-manage/" style="--accent:var(--d1)">
+        <span class="nc-badge">Domain 1 · 30–35%</span>
+        <h3>Implement &amp; manage an analytics solution</h3>
+        <p>Spark, domain, OneLake and Apache Airflow workspace settings; Git integration, database projects, deployment pipelines; the full security stack; orchestration.</p>
+        <span class="nc-foot">Explore →</span>
+      </a>
+      <a class="nav-card" href="domain-2-ingest-transform/" style="--accent:var(--d2)">
+        <span class="nc-badge">Domain 2 · 30–35%</span>
+        <h3>Ingest &amp; transform data</h3>
+        <p>Full vs incremental loads, dimensional modelling and SCDs, shortcuts vs mirroring, pipelines, PySpark / T-SQL / KQL transforms, Eventstreams and windowing.</p>
+        <span class="nc-foot">Explore →</span>
+      </a>
+      <a class="nav-card" href="domain-3-monitor-optimize/" style="--accent:var(--d3)">
+        <span class="nc-badge">Domain 3 · 30–35%</span>
+        <h3>Monitor &amp; optimize an analytics solution</h3>
+        <p>Monitoring hub, Activator alerts, error triage across seven item types, and optimization of Lakehouse tables, pipelines, Warehouse, Eventhouse, Spark and queries.</p>
+        <span class="nc-foot">Explore →</span>
+      </a>
+      <a class="nav-card" href="exam-tips/" style="--accent:var(--d4)">
+        <span class="nc-badge">Final review</span>
+        <h3>Exam tips &amp; caveats</h3>
+        <p>Key numbers, master decision trees, the highest-yield traps, a scenario→answer lookup table, and a pre-exam checklist for the night before.</p>
+        <span class="nc-foot">Drill these →</span>
+      </a>
+    </div>
+
+    <h2 class="content" style="border:0;margin-bottom:6px">Before you book</h2>
+    <div class="card-grid">
+      <div class="stat"><div class="s-num">700</div><div class="s-lbl">Score needed to pass (scaled to 1000)</div></div>
+      <div class="stat"><div class="s-num">100</div><div class="s-lbl">Minutes of exam time</div></div>
+      <div class="stat"><div class="s-num">3</div><div class="s-lbl">Equally weighted skill domains</div></div>
+      <div class="stat"><div class="s-num">1y</div><div class="s-lbl">Certification renewal (free online)</div></div>
+    </div>
+
+    <div class="callout exam">
+      <p class="ct-title">Exam reality check</p>
+      <p>Expect <strong>case studies</strong>, drag-and-drop ordering, "build list" sequencing, hotspot (dropdown) and yes/no statement sets. You will be asked to read short PySpark, T-SQL and KQL snippets — you rarely have to write them from scratch, but you must recognise what they do and what is wrong with them. The <a href="exam-tips/">Exam Tips page</a> collects the highest-yield caveats. Most questions cover GA features; commonly-used Preview features can appear.</p>
+    </div>
+
+    <div class="callout warn">
+      <p class="ct-title">Disclaimer</p>
+      <p>These notes are an independent study aid for <strong>learning purposes only</strong> and are not affiliated with or endorsed by Microsoft. Fabric ships changes almost weekly and Microsoft frequently renames and re-scopes features — <strong>always verify every detail against the official Microsoft documentation</strong> linked throughout before relying on it.</p>
+    </div>
+
+  </div>
+
+  <script src="assets/js/main.js"></script>
+</body>
+</html>

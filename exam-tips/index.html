@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Exam Tips &amp; Caveats — DP-700</title>
+  <meta name="description" content="DP-700 final review: key numbers to memorize, master decision trees, the highest-yield exam traps, a scenario-to-answer lookup table, question-type strategy and a pre-exam checklist.">
+  <meta name="author" content="Marco Grimaldi">
+  <link rel="canonical" href="https://marcogrimaldi29.com/dp-700-study-notes-v2/exam-tips/">
+  <meta name="robots" content="index, follow">
+  <meta name="theme-color" content="#b38600">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="DP-700 Study Notes v2">
+  <meta property="og:title" content="DP-700 Exam Tips &amp; Caveats">
+  <meta property="og:description" content="Key numbers, decision trees, the highest-yield traps and a pre-exam checklist for DP-700.">
+  <meta property="og:url" content="https://marcogrimaldi29.com/dp-700-study-notes-v2/exam-tips/">
+  <meta property="og:image" content="https://marcogrimaldi29.com/dp-700-study-notes-v2/assets/images/site-mark-no-bg.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="DP-700 Exam Tips &amp; Caveats">
+  <meta name="twitter:description" content="Final-review drill for the Fabric Data Engineer exam.">
+  <meta name="twitter:image" content="https://marcogrimaldi29.com/dp-700-study-notes-v2/assets/images/site-mark-no-bg.png">
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@graph":[{"@type":"TechArticle","headline":"DP-700 Exam Tips & Caveats","description":"Key numbers, decision trees, the highest-yield traps and a pre-exam checklist for DP-700.","inLanguage":"en","url":"https://marcogrimaldi29.com/dp-700-study-notes-v2/exam-tips/","author":{"@type":"Person","name":"Marco Grimaldi","url":"https://marcogrimaldi29.com/"},"isPartOf":"https://marcogrimaldi29.com/dp-700-study-notes-v2/"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"DP-700 Study Notes v2","item":"https://marcogrimaldi29.com/dp-700-study-notes-v2/"},{"@type":"ListItem","position":2,"name":"Exam Tips","item":"https://marcogrimaldi29.com/dp-700-study-notes-v2/exam-tips/"}]}]}
+  </script>
+  <link rel="icon" href="../assets/images/site-mark-no-bg.png">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body data-page="tips">
+  <div class="layout" style="--accent:var(--d4)">
+
+    <aside class="toc"><h4>On this page</h4><nav id="toc-list"></nav></aside>
+
+    <main class="content">
+      <div class="page-head">
+        <div class="kicker">Final review</div>
+        <h1>Exam tips &amp; caveats</h1>
+        <p>The last-mile page. Numbers to memorize, decision trees to internalize, and the traps that decide borderline results. Read this the evening before.</p>
+      </div>
+
+      <div class="callout exam">
+        <p class="ct-title">How DP-700 is actually scored</p>
+        <p><strong>700 of 1000</strong> is a <em>scaled</em> score — it is <strong>not</strong> 70% of questions correct. Questions are weighted, and there is no penalty for guessing, so <strong>never leave anything blank</strong>. The three domains are equally weighted at 30–35% each, so a weak domain costs you roughly a third of the exam.</p>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="numbers">Key numbers to memorize</h2>
+      <div class="table-wrap">
+        <table class="tbl">
+          <thead><tr><th>Item</th><th>Value</th><th>Why it matters</th></tr></thead>
+          <tbody>
+            <tr><td>Passing score</td><td><strong>700 / 1000</strong></td><td>Scaled, not a percentage</td></tr>
+            <tr><td>Exam duration</td><td><strong>100 minutes</strong></td><td>~120 min seat time including check-in</td></tr>
+            <tr><td>Domain weights</td><td><strong>30–35% each</strong></td><td>All three equal — no domain to skip</td></tr>
+            <tr><td>Capacity unit → Spark</td><td><strong>1 CU = 2 Spark vCores</strong></td><td>F64 = 128 base vCores</td></tr>
+            <tr><td>Spark burst factor</td><td><strong>3×</strong></td><td>F64 bursts to 384 Spark vCores</td></tr>
+            <tr><td>Free-viewer threshold</td><td><strong>F64</strong></td><td>Below it, consumers need Power BI Pro</td></tr>
+            <tr><td>Background smoothing window</td><td><strong>24 hours</strong></td><td>Interactive smooths over <strong>5 minutes</strong></td></tr>
+            <tr><td>Throttling ladder</td><td><strong>10 min → 60 min → 24 h</strong></td><td>Interactive delay → interactive rejection → background rejection</td></tr>
+            <tr><td>Fabric trial</td><td><strong>60 days</strong></td><td>Behaves like an F64 for feature gating</td></tr>
+            <tr><td>VACUUM default retention</td><td><strong>7 days (168 hours)</strong></td><td>Going below breaks time travel</td></tr>
+            <tr><td>Delta checkpoint interval</td><td><strong>Every 10 commits</strong></td><td>Log compaction into Parquet</td></tr>
+            <tr><td>Deployment pipeline stages</td><td><strong>Up to 10</strong></td><td>Typically Dev → Test → Prod</td></tr>
+            <tr><td>Airflow extra node</td><td><strong>+3 workers each</strong></td><td>Concurrency scaling for DAGs</td></tr>
+            <tr><td>Shortcut target types</td><td><strong>OneLake, ADLS Gen2, S3 (+compatible), GCS, Dataverse</strong></td><td>Know which are cross-cloud</td></tr>
+            <tr><td>Git providers</td><td><strong>Azure DevOps, GitHub</strong></td><td>Nothing else natively</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout warn">
+        <p class="ct-title">Numbers drift — verify before exam day</p>
+        <p>Fabric limits, SKU tables and preview/GA status change frequently. Treat these as the values to reason with, and spot-check the volatile ones (mirroring sources, OneLake security capabilities, capacity limits) against <a href="https://learn.microsoft.com/en-us/fabric/" target="_blank" rel="noopener">Microsoft Learn</a> shortly before you sit.</p>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="trees">Master decision trees</h2>
+
+      <h3 id="tree-store">Where should this data live?</h3>
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+flowchart TD
+  S([Storage decision]) --> Q1{Access pattern}
+  Q1 -->|"T-SQL read AND write, stored procs"| WH["Warehouse"]
+  Q1 -->|"Spark, files, mixed engines"| LH["Lakehouse"]
+  Q1 -->|"High-volume events, time-series"| EH["Eventhouse"]
+  Q1 -->|"Already in a lake, don't duplicate"| SC["OneLake shortcut"]
+  Q1 -->|"Live replica of an operational DB"| MR["Mirroring"]
+        </div>
+      </div>
+
+      <h3 id="tree-transform">How should I transform it?</h3>
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+flowchart TD
+  S([Transform decision]) --> Q1{Who and how big?}
+  Q1 -->|"Analyst, no code"| DF["Dataflow Gen2"]
+  Q1 -->|"Engineer, very large or complex"| NB["Notebook / PySpark"]
+  Q1 -->|"SQL developer, data in Warehouse"| TS["T-SQL / CTAS / stored proc"]
+  Q1 -->|"Telemetry in an Eventhouse"| KQ["KQL / update policy"]
+  Q1 -->|"Streaming with big joins"| SS["Spark structured streaming"]
+        </div>
+      </div>
+
+      <h3 id="tree-orchestrate">How should I orchestrate it?</h3>
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+flowchart TD
+  S([Orchestration decision]) --> Q1{One step or many?}
+  Q1 -->|"A single transform"| ONE["Dataflow Gen2 or notebook<br/>on its own schedule"]
+  Q1 -->|"Multiple ordered steps,<br/>conditions, loops, retries"| PIPE["Data pipeline"]
+  Q1 -->|"Existing Airflow DAGs,<br/>Python-defined dependencies"| AF["Apache Airflow job"]
+  Q1 -->|"React to a data condition"| ACT["Activator rule"]
+  PIPE --> TRG{Trigger}
+  TRG -->|"Time-based"| SCH["Schedule"]
+  TRG -->|"File lands / job completes"| EVT["Event trigger via Real-Time hub"]
+        </div>
+      </div>
+
+      <h3 id="tree-security">Which security control?</h3>
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+flowchart TD
+  S([Security decision]) --> Q1{Granularity}
+  Q1 -->|"Whole workspace"| WR["Workspace role"]
+  Q1 -->|"One item"| IP["Item permission / share"]
+  Q1 -->|"Certain rows, SQL only"| RLS["RLS security policy"]
+  Q1 -->|"Certain rows, every engine"| OLS2["OneLake security"]
+  Q1 -->|"Certain columns"| CLS["CLS — GRANT/DENY"]
+  Q1 -->|"Object must be invisible"| OLS["OLS in semantic model"]
+  Q1 -->|"Show partial values only"| DDM["Dynamic data masking"]
+  Q1 -->|"A folder in a Lakehouse"| FLS["OneLake data access role"]
+        </div>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="traps">Top exam traps</h2>
+
+      <div class="card">
+        <ol>
+          <li><strong>The Lakehouse SQL analytics endpoint is read-only.</strong> No INSERT/UPDATE/DELETE/MERGE via T-SQL. Writes need Spark, or a Warehouse.</li>
+          <li><strong>OPTIMIZE ≠ VACUUM.</strong> OPTIMIZE compacts small files; VACUUM deletes unreferenced old files. Neither does the other's job.</li>
+          <li><strong>VACUUM below 7 days breaks time travel</strong> and can break running readers. Spark blocks it unless you disable the safety check.</li>
+          <li><strong>V-Order ≠ Z-Order.</strong> V-Order optimizes <em>within</em> files at write time; Z-Order co-locates <em>across</em> files during OPTIMIZE.</li>
+          <li><strong>Mirroring ≠ shortcuts.</strong> Mirroring replicates via CDC (one-way, read-only in Fabric); shortcuts point at data and copy nothing.</li>
+          <li><strong>Git and deployment pipelines move definitions, never data.</strong> No rows are promoted, ever.</li>
+          <li><strong>Deployment rules go on the target stage</strong>, not the source. This is the classic wrong click.</li>
+          <li><strong>Member can reshare; Contributor cannot.</strong> That single difference decides most role questions.</li>
+          <li><strong>ReadAll bypasses SQL-layer security.</strong> RLS, CLS and DDM are enforced by the SQL engine — direct OneLake/Spark readers see raw data. Cross-engine enforcement means OneLake security.</li>
+          <li><strong>DDM is not a security boundary.</strong> UNMASK, elevated permissions or inference through WHERE clauses defeat it.</li>
+          <li><strong>OLS exists only in semantic models</strong>, and its point is total invisibility — not an access error.</li>
+          <li><strong>Warehouse constraints are NOT ENFORCED.</strong> A primary key will not stop duplicate inserts; dedupe in the load.</li>
+          <li><strong>Dataflow Gen2 memory/timeout → staging and query folding</strong>, not a larger capacity.</li>
+          <li><strong>Streaming needs a checkpoint and (for stateful aggregations) a watermark.</strong> No checkpoint → reprocessing on restart. No watermark → unbounded state and eventual crash.</li>
+          <li><strong>Tumbling counts each event once; hopping and sliding overlap.</strong> A hopping window with hop = size is a tumbling window.</li>
+          <li><strong>AQE is on by default.</strong> Answers that manually tune shuffle partitions or hand-fix skew are usually distractors.</li>
+          <li><strong>coalesce() cannot fix skew</strong> — it only reduces partition count without a shuffle. repartition() rebalances.</li>
+          <li><strong>Broadcasting too large a table</strong> just relocates the OOM to the driver.</li>
+          <li><strong>Caching policy ≠ retention policy.</strong> Past cache = slow. Past retention = gone.</li>
+          <li><strong>Query acceleration costs extra CUs</strong> and introduces slight staleness — it buys speed, not freshness.</li>
+          <li><strong>Shortcut data is excluded from OPTIMIZE and VACUUM</strong> on the hosting Lakehouse.</li>
+          <li><strong>Shortcut access needs permission on both sides</strong> — the source system and OneLake.</li>
+          <li><strong>Each streaming consumer needs its own consumer group</strong>, or readers silently split the events.</li>
+          <li><strong>%pip install is session-only.</strong> Persistent libraries belong in an Environment.</li>
+          <li><strong>Direct Lake has no data refresh to schedule</strong> — but it can silently fall back to DirectQuery.</li>
+          <li><strong>dropDuplicates keeps an arbitrary row.</strong> "Keep the latest" needs row_number() over a window.</li>
+          <li><strong>Starter pool = fast start, fixed size. Custom pool = your size, cold start.</strong></li>
+          <li><strong>Promotion is self-service; certification is allow-listed.</strong></li>
+        </ol>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="confusions">Pairs people mix up</h2>
+      <div class="table-wrap">
+        <table class="tbl t-slate">
+          <thead><tr><th>This</th><th>Not this</th><th>The distinction in one line</th></tr></thead>
+          <tbody>
+            <tr><td><strong>OPTIMIZE</strong></td><td>VACUUM</td><td>Compacts vs deletes</td></tr>
+            <tr><td><strong>V-Order</strong></td><td>Z-Order</td><td>Inside files at write vs across files at optimize</td></tr>
+            <tr><td><strong>Shortcut</strong></td><td>Mirroring</td><td>Points at data vs replicates data</td></tr>
+            <tr><td><strong>Lakehouse</strong></td><td>Warehouse</td><td>Spark + read-only SQL vs full read/write T-SQL</td></tr>
+            <tr><td><strong>RLS</strong></td><td>OneLake security</td><td>SQL engine only vs every engine</td></tr>
+            <tr><td><strong>CLS</strong></td><td>OLS</td><td>Permission error vs completely invisible</td></tr>
+            <tr><td><strong>DDM</strong></td><td>CLS</td><td>Obfuscated but present vs genuinely denied</td></tr>
+            <tr><td><strong>Member</strong></td><td>Contributor</td><td>Can reshare vs cannot</td></tr>
+            <tr><td><strong>Sensitivity label</strong></td><td>Endorsement</td><td>How confidential vs how trustworthy</td></tr>
+            <tr><td><strong>Promoted</strong></td><td>Certified</td><td>Anyone vs allow-listed certifiers</td></tr>
+            <tr><td><strong>Git integration</strong></td><td>Deployment pipeline</td><td>Version and review vs promote between stages</td></tr>
+            <tr><td><strong>Database project</strong></td><td>Deployment pipeline</td><td>Schema-object level vs whole-item level</td></tr>
+            <tr><td><strong>Data pipeline</strong></td><td>Airflow job</td><td>Fabric-native visual vs Python DAGs and Airflow operators</td></tr>
+            <tr><td><strong>Tumbling</strong></td><td>Hopping</td><td>No overlap vs overlapping by hop</td></tr>
+            <tr><td><strong>Caching policy</strong></td><td>Retention policy</td><td>How fast vs how long it exists</td></tr>
+            <tr><td><strong>Monitoring hub</strong></td><td>Capacity Metrics app</td><td>Did the run fail vs what burned the CUs</td></tr>
+            <tr><td><strong>coalesce()</strong></td><td>repartition()</td><td>No shuffle, reduce only vs full shuffle, rebalance</td></tr>
+            <tr><td><strong>%run</strong></td><td>notebookutils.notebook.run()</td><td>Same session, shares variables vs separate job, returns a value</td></tr>
+            <tr><td><strong>SCD Type 1</strong></td><td>SCD Type 2</td><td>Overwrite vs new row with validity dates</td></tr>
+            <tr><td><strong>Starter pool</strong></td><td>Custom pool</td><td>Warm and fixed vs sized and cold</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="strategy">Question-type strategy</h2>
+      <div class="table-wrap">
+        <table class="tbl">
+          <thead><tr><th>Type</th><th>How to attack it</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Case study</strong></td><td>Read the <em>requirements and constraints</em> sections first, then the questions, then re-read only the relevant paragraph. Constraints ("must not copy data", "analysts have no coding skills", "must survive re-runs") are the answer keys.</td></tr>
+            <tr><td><strong>Build list / ordering</strong></td><td>Anchor the first and last steps — they are usually obvious — then order the middle by dependency. Watch for steps that are plausible but not required; extra steps are wrong.</td></tr>
+            <tr><td><strong>Hotspot / dropdown</strong></td><td>Each dropdown is scored separately. Answer the ones you know confidently first; don't let one uncertain field make you second-guess the rest.</td></tr>
+            <tr><td><strong>Yes/No statement sets</strong></td><td>Evaluate each statement <strong>independently</strong> against the original scenario. The same scenario is often repeated with a different proposed solution — re-read it each time.</td></tr>
+            <tr><td><strong>Code reading</strong></td><td>You mostly need to spot what is <em>missing</em> or wrong: no checkpoint, no watermark, wrong output mode, coalesce where repartition is needed, MERGE condition that misses the current-row filter.</td></tr>
+            <tr><td><strong>"Which tool" questions</strong></td><td>Find the persona and the hard constraint. "No-code" excludes notebooks. "Stored procedure" excludes Lakehouse. "Without copying data" excludes mirroring and copy activity.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout tip">
+        <p class="ct-title">Time management</p>
+        <p>100 minutes across roughly 40–60 items leaves under two minutes each. Do a fast first pass answering everything you know, flag the rest, and come back. Case studies are worth reading carefully but should not consume half your clock — if a case study appears in a locked section, finish it before moving on, because you may not be able to return.</p>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="lookup">Scenario → answer lookup</h2>
+      <div class="table-wrap">
+        <table class="tbl">
+          <thead><tr><th>Scenario</th><th>Answer</th></tr></thead>
+          <tbody>
+            <tr><td>SQL developers need stored procedures and transactions</td><td><strong>Warehouse</strong></td></tr>
+            <tr><td>Engineers need PySpark and SQL over the same data, plus raw files</td><td><strong>Lakehouse</strong></td></tr>
+            <tr><td>Millions of telemetry events, sub-second dashboards</td><td><strong>Eventhouse / KQL database</strong></td></tr>
+            <tr><td>Query ADLS/S3 data without copying it</td><td><strong>OneLake shortcut</strong></td></tr>
+            <tr><td>Near real-time replica of Azure SQL DB with no ETL</td><td><strong>Mirroring</strong></td></tr>
+            <tr><td>Simple recurring incremental copy, minimal authoring</td><td><strong>Copy job</strong></td></tr>
+            <tr><td>Analyst builds a transform with no code</td><td><strong>Dataflow Gen2</strong></td></tr>
+            <tr><td>Multi-step workflow with branching and retries</td><td><strong>Data pipeline</strong></td></tr>
+            <tr><td>Migrating existing Airflow DAGs</td><td><strong>Apache Airflow job</strong></td></tr>
+            <tr><td>Run a job when a file lands in OneLake</td><td><strong>Event-based trigger</strong></td></tr>
+            <tr><td>Alert and act when a metric crosses a threshold</td><td><strong>Activator</strong></td></tr>
+            <tr><td>Load only rows changed since the last run</td><td><strong>Watermark + MERGE</strong></td></tr>
+            <tr><td>Re-running a load must not duplicate rows</td><td><strong>MERGE on the business key</strong></td></tr>
+            <tr><td>Track full history of dimension changes</td><td><strong>SCD Type 2</strong></td></tr>
+            <tr><td>Keep only the newest row per key</td><td><strong>row_number() over a window</strong></td></tr>
+            <tr><td>Fact arrives before its dimension row</td><td><strong>Inferred member placeholder</strong></td></tr>
+            <tr><td>Count each event once per 5-minute block</td><td><strong>Tumbling window</strong></td></tr>
+            <tr><td>15-minute average reported every 5 minutes</td><td><strong>Hopping window</strong></td></tr>
+            <tr><td>Group activity until 30 minutes idle</td><td><strong>Session window</strong></td></tr>
+            <tr><td>Enrich a stream with a huge batch dimension</td><td><strong>Spark structured streaming</strong></td></tr>
+            <tr><td>Route one stream to two destinations, no code</td><td><strong>Eventstream</strong></td></tr>
+            <tr><td>Faster KQL over shortcut data</td><td><strong>Query acceleration</strong></td></tr>
+            <tr><td>Restrict rows for SQL consumers</td><td><strong>RLS</strong></td></tr>
+            <tr><td>Restrict rows for Spark consumers too</td><td><strong>OneLake security</strong></td></tr>
+            <tr><td>Hide a column from analysts</td><td><strong>CLS</strong></td></tr>
+            <tr><td>Table must not appear at all</td><td><strong>OLS</strong></td></tr>
+            <tr><td>Show only the last four digits</td><td><strong>DDM partial()</strong></td></tr>
+            <tr><td>Restrict one Lakehouse folder</td><td><strong>OneLake data access role</strong></td></tr>
+            <tr><td>Build items but never share them</td><td><strong>Contributor</strong></td></tr>
+            <tr><td>Mark the authoritative semantic model</td><td><strong>Certified endorsement</strong></td></tr>
+            <tr><td>Review changes before they reach Prod</td><td><strong>Git + pull request</strong></td></tr>
+            <tr><td>Promote items Dev → Test → Prod</td><td><strong>Deployment pipeline</strong></td></tr>
+            <tr><td>Warehouse schema in source control with drift detection</td><td><strong>Database project</strong></td></tr>
+            <tr><td>Who exported this report?</td><td><strong>Purview audit log</strong></td></tr>
+            <tr><td>What is consuming the capacity?</td><td><strong>Capacity Metrics app</strong></td></tr>
+            <tr><td>Why did last night's run fail?</td><td><strong>Monitoring hub</strong></td></tr>
+            <tr><td>Too many small files</td><td><strong>OPTIMIZE</strong></td></tr>
+            <tr><td>Slow filters on specific columns</td><td><strong>Z-Order</strong></td></tr>
+            <tr><td>Storage bloat from old versions</td><td><strong>VACUUM</strong></td></tr>
+            <tr><td>One task far slower than the rest</td><td><strong>Data skew — salt / AQE</strong></td></tr>
+            <tr><td>Slow join with one tiny table</td><td><strong>Broadcast join</strong></td></tr>
+            <tr><td>Dataflow Gen2 out of memory</td><td><strong>Staging + query folding</strong></td></tr>
+            <tr><td>Old KQL data slow / old KQL data gone</td><td><strong>Caching policy / retention policy</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="checklist">Pre-exam checklist</h2>
+      <div class="card">
+        <p>If you can answer every one of these out loud without notes, you are ready.</p>
+        <ul>
+          <li>Can you state the <strong>Lakehouse vs Warehouse vs Eventhouse</strong> decision and the read-only endpoint limitation?</li>
+          <li>Can you describe the <strong>watermark incremental pattern</strong> end to end, and why MERGE makes it idempotent?</li>
+          <li>Can you implement <strong>SCD Type 2</strong> and explain why it takes two MERGE passes?</li>
+          <li>Can you name all <strong>six security layers</strong> and which engine enforces each?</li>
+          <li>Do you know why <strong>ReadAll</strong> defeats RLS/CLS/DDM, and what to use instead?</li>
+          <li>Can you distinguish <strong>OPTIMIZE, VACUUM, V-Order and Z-Order</strong> in one line each?</li>
+          <li>Do you know the <strong>capacity throttling ladder</strong> and which tool diagnoses it?</li>
+          <li>Can you configure <strong>Spark, domain, OneLake and Apache Airflow</strong> workspace settings, and say what each controls?</li>
+          <li>Can you choose between <strong>Dataflow Gen2, notebook, pipeline and Airflow job</strong> from a scenario?</li>
+          <li>Do you know <strong>Git vs deployment pipelines vs database projects</strong>, and that none of them move data?</li>
+          <li>Can you name the <strong>five window types</strong> and pick one from a description?</li>
+          <li>Do you know why streaming needs a <strong>checkpoint</strong> and a <strong>watermark</strong>?</li>
+          <li>Can you choose between <strong>native table, accelerated shortcut and standard shortcut</strong> in RTI?</li>
+          <li>Can you triage errors across <strong>pipelines, dataflows, notebooks, Eventhouse, Eventstream, T-SQL and shortcuts</strong>?</li>
+          <li>Do you know the <strong>three query insights views</strong> and when to use each?</li>
+          <li>Can you read a Spark UI symptom and name the fix — <strong>skew, shuffle, spill, small files, cold start</strong>?</li>
+        </ul>
+      </div>
+
+      <div class="callout tip">
+        <p class="ct-title">The night before</p>
+        <p>Do not learn anything new. Re-read the <a href="#traps">traps list</a> and the <a href="#confusions">confusable pairs</a> table, take the free <a href="https://learn.microsoft.com/en-us/credentials/certifications/exams/dp-700/" target="_blank" rel="noopener">Microsoft practice assessment</a> one final time, and sleep. Recognition speed matters more on this exam than depth of recall.</p>
+      </div>
+
+      <div class="callout warn">
+        <p class="ct-title">Disclaimer</p>
+        <p>These notes are an independent study aid for <strong>learning purposes only</strong>, not affiliated with or endorsed by Microsoft, and contain no exam content. Microsoft Fabric changes rapidly — <strong>always verify against the official documentation</strong> and the current <a href="https://learn.microsoft.com/en-us/credentials/certifications/resources/study-guides/dp-700" target="_blank" rel="noopener">DP-700 study guide</a>.</p>
+      </div>
+
+      <div class="pager">
+        <a class="prev" href="../domain-3-monitor-optimize/"><div class="pg-dir">← Previous</div><div class="pg-title">Domain 3 · Monitor &amp; optimize</div></a>
+        <a class="next" href="../"><div class="pg-dir">Next →</div><div class="pg-title">Back to home</div></a>
+      </div>
+
+    </main>
+  </div>
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

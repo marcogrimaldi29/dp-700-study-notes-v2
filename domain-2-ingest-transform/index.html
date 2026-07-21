@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Domain 2 · Ingest &amp; Transform Data — DP-700</title>
+  <meta name="description" content="DP-700 Domain 2 study notes: full and incremental loading patterns, dimensional modelling and slowly changing dimensions, OneLake shortcuts, mirroring, pipeline ingestion, PySpark/T-SQL/KQL transformation, duplicate and late-arriving data, Eventstreams, Spark structured streaming and windowing functions.">
+  <meta name="author" content="Marco Grimaldi">
+  <link rel="canonical" href="https://marcogrimaldi29.com/dp-700-study-notes-v2/domain-2-ingest-transform/">
+  <meta name="robots" content="index, follow">
+  <meta name="theme-color" content="#0d7d72">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="DP-700 Study Notes v2">
+  <meta property="og:title" content="DP-700 Domain 2 · Ingest and transform data">
+  <meta property="og:description" content="Loading patterns, batch ingestion and transformation, and streaming with Eventstreams, Spark structured streaming and KQL.">
+  <meta property="og:url" content="https://marcogrimaldi29.com/dp-700-study-notes-v2/domain-2-ingest-transform/">
+  <meta property="og:image" content="https://marcogrimaldi29.com/dp-700-study-notes-v2/assets/images/site-mark-no-bg.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="DP-700 Domain 2 · Ingest and transform data">
+  <meta name="twitter:description" content="Loading patterns, batch and streaming ingestion and transformation in Microsoft Fabric.">
+  <meta name="twitter:image" content="https://marcogrimaldi29.com/dp-700-study-notes-v2/assets/images/site-mark-no-bg.png">
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@graph":[{"@type":"TechArticle","headline":"DP-700 Domain 2 · Ingest and transform data","description":"Loading patterns, batch ingestion and transformation, and streaming with Eventstreams, Spark structured streaming and KQL.","inLanguage":"en","url":"https://marcogrimaldi29.com/dp-700-study-notes-v2/domain-2-ingest-transform/","author":{"@type":"Person","name":"Marco Grimaldi","url":"https://marcogrimaldi29.com/"},"isPartOf":"https://marcogrimaldi29.com/dp-700-study-notes-v2/"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"DP-700 Study Notes v2","item":"https://marcogrimaldi29.com/dp-700-study-notes-v2/"},{"@type":"ListItem","position":2,"name":"Domain 2 · Ingest and transform","item":"https://marcogrimaldi29.com/dp-700-study-notes-v2/domain-2-ingest-transform/"}]}]}
+  </script>
+  <link rel="icon" href="../assets/images/site-mark-no-bg.png">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body data-page="ingest">
+  <div class="layout" style="--accent:var(--d2)">
+
+    <aside class="toc"><h4>On this page</h4><nav id="toc-list"></nav></aside>
+
+    <main class="content">
+      <div class="page-head">
+        <div class="kicker">Domain 2 · 30–35%</div>
+        <h1>Ingest and transform data</h1>
+        <p>The craft third of the exam: getting data in — batch or streaming — and reshaping it correctly, idempotently, and with the right engine for the job.</p>
+      </div>
+
+      <div class="card">
+        <strong>Three objectives:</strong>
+        <ul style="margin-bottom:0">
+          <li><a href="#loading-patterns">2.1 Loading patterns</a> — full vs incremental, dimensional modelling, streaming load design</li>
+          <li><a href="#batch">2.2 Batch ingestion &amp; transformation</a> — data store and tool choice, shortcuts, mirroring, pipelines, PySpark/SQL/KQL, data quality</li>
+          <li><a href="#streaming">2.3 Streaming ingestion &amp; transformation</a> — engine choice, RTI storage options, Eventstreams, structured streaming, windowing</li>
+        </ul>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="loading-patterns"><span class="num">2.1</span> Design and implement loading patterns</h2>
+
+      <h3 id="full-vs-incremental">Full vs incremental loads</h3>
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+flowchart TD
+  S([Loading strategy]) --> Q1{Volume and change rate}
+  Q1 -->|"Small table, or first load"| FULL["Full load<br/>truncate and reload"]
+  Q1 -->|"Large table, frequent changes"| INC["Incremental load"]
+  INC --> Q2{How do we detect change?}
+  Q2 -->|"Reliable modified date column"| WM["Watermark<br/>high-water mark"]
+  Q2 -->|"Source exposes CDC / change feed"| CDC["CDC · Mirroring · Delta CDF"]
+  Q2 -->|"No reliable change column"| HASH["Row hash comparison"]
+  WM --> MERGE["MERGE into target"]
+  CDC --> MERGE
+  HASH --> MERGE
+        </div>
+        <div class="mm-cap">Change detection drives the design; MERGE is almost always how the change lands in Delta.</div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="tbl t-teal">
+          <thead><tr><th>Aspect</th><th>Full load</th><th>Incremental load</th></tr></thead>
+          <tbody>
+            <tr><td>Data moved</td><td>Everything, every run</td><td>Only new/changed rows</td></tr>
+            <tr><td>Target operation</td><td><code>TRUNCATE</code> + <code>INSERT</code>, or overwrite</td><td><code>MERGE</code> / upsert / append</td></tr>
+            <tr><td>Complexity</td><td>Low</td><td>Higher — needs state tracking</td></tr>
+            <tr><td>Runtime</td><td>Scales with total size</td><td>Scales with change volume</td></tr>
+            <tr><td>Idempotent</td><td>Naturally</td><td>Only if designed for it</td></tr>
+            <tr><td>Best for</td><td>Small dimensions, reference data, initial seeding</td><td>Large fact tables, frequent refreshes</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout exam">
+        <p class="ct-title">Caveat — idempotency is the hidden requirement</p>
+        <p>Any incremental design must survive being re-run after a failure without duplicating or losing rows. That is why <strong>MERGE on a business key</strong> beats a blind <code>append</code>, and why the watermark should be committed <strong>only after</strong> the load succeeds. A question describing "the pipeline failed halfway and re-running created duplicates" is testing exactly this — the fix is MERGE, not a bigger cluster.</p>
+      </div>
+
+      <h4>The watermark pattern</h4>
+      <ol class="steps">
+        <li><strong>Lookup</strong> the last successful watermark from a control table.</li>
+        <li><strong>Copy</strong> source rows where <code>ModifiedDate &gt; @watermark</code> into a staging/bronze area.</li>
+        <li><strong>MERGE</strong> staging into the target on the business key.</li>
+        <li><strong>Update</strong> the control table with the new maximum <code>ModifiedDate</code> — only now, and only on success.</li>
+      </ol>
+
+      <h3 id="dimensional">Preparing data for a dimensional model</h3>
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+flowchart LR
+  SRC["Source systems"] --> BRZ["Bronze<br/>raw, as landed, append-only"]
+  BRZ --> SLV["Silver<br/>cleansed, typed, deduplicated, conformed"]
+  SLV --> GLD["Gold<br/>dimensional model"]
+  GLD --> DIM["Dimension tables<br/>surrogate keys, SCD"]
+  GLD --> FCT["Fact tables<br/>measures + dimension FKs"]
+        </div>
+        <div class="mm-cap">The medallion architecture. Bronze preserves history and enables replay; gold is what BI consumes.</div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="tbl t-teal">
+          <thead><tr><th>Concept</th><th>What it means</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Star schema</strong></td><td>Central fact table joined to denormalized dimensions — the target shape for Power BI</td></tr>
+            <tr><td><strong>Surrogate key</strong></td><td>A system-generated key on the dimension, independent of the source's business key; required for SCD Type 2</td></tr>
+            <tr><td><strong>Business / natural key</strong></td><td>The source's own identifier — what you MERGE on</td></tr>
+            <tr><td><strong>Conformed dimension</strong></td><td>One shared dimension used consistently by multiple facts</td></tr>
+            <tr><td><strong>Fact grain</strong></td><td>What one row of the fact table represents — define it before anything else</td></tr>
+            <tr><td><strong>Degenerate dimension</strong></td><td>A dimension attribute (e.g. order number) kept on the fact with no separate table</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>Slowly changing dimensions</h4>
+      <div class="table-wrap">
+        <table class="tbl t-teal">
+          <thead><tr><th>Type</th><th>Behaviour</th><th>Implementation</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Type 0</strong></td><td>Never changes (fixed attributes)</td><td>Insert once, ignore later changes</td></tr>
+            <tr><td><strong>Type 1</strong></td><td><strong>Overwrite</strong> — no history kept</td><td>MERGE with <code>WHEN MATCHED THEN UPDATE</code></td></tr>
+            <tr><td><strong>Type 2</strong></td><td><strong>Full history</strong> — a new row per version</td><td>Close the old row (<code>ValidTo</code>, <code>IsCurrent = false</code>) and insert a new current row</td></tr>
+            <tr><td><strong>Type 3</strong></td><td>Keeps only the <strong>previous</strong> value</td><td>Add a <code>PreviousValue</code> column</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="code-block"><span class="lang">PySpark · SCD Type 2 with MERGE</span><pre class="code"><code><span class="kw">from</span> delta.tables <span class="kw">import</span> DeltaTable
+<span class="kw">from</span> pyspark.sql.functions <span class="kw">import</span> col, lit, current_date
+
+dim = DeltaTable.forName(spark, <span class="st">"gold_dim_customer"</span>)
+
+<span class="cm"># Step 1 — close out rows whose tracked attributes changed</span>
+(dim.alias(<span class="st">"t"</span>)
+   .merge(updates.alias(<span class="st">"s"</span>),
+          <span class="st">"t.customer_id = s.customer_id AND t.is_current = true"</span>)
+   .whenMatchedUpdate(
+       condition=<span class="st">"t.address &lt;&gt; s.address OR t.segment &lt;&gt; s.segment"</span>,
+       set={<span class="st">"is_current"</span>: lit(<span class="kw">False</span>), <span class="st">"valid_to"</span>: current_date()})
+   .execute())
+
+<span class="cm"># Step 2 — insert the new current versions</span>
+(dim.alias(<span class="st">"t"</span>)
+   .merge(updates.alias(<span class="st">"s"</span>),
+          <span class="st">"t.customer_id = s.customer_id AND t.is_current = true"</span>)
+   .whenNotMatchedInsert(values={
+       <span class="st">"customer_id"</span>: <span class="st">"s.customer_id"</span>,
+       <span class="st">"address"</span>:     <span class="st">"s.address"</span>,
+       <span class="st">"segment"</span>:     <span class="st">"s.segment"</span>,
+       <span class="st">"valid_from"</span>:  <span class="st">"current_date()"</span>,
+       <span class="st">"valid_to"</span>:    <span class="st">"null"</span>,
+       <span class="st">"is_current"</span>:  <span class="st">"true"</span>})
+   .execute())</code></pre></div>
+      <div class="callout exam">
+        <p class="ct-title">Caveat — SCD Type 2 needs two passes</p>
+        <p>A single MERGE cannot both <em>close</em> the old row and <em>insert</em> a new one for the same key, because a MERGE matches each target row once. The standard implementation is <strong>two statements</strong> (close, then insert) or a single MERGE fed by a union that duplicates changed keys with a null join key. Expect the exam to test that Type 2 = new row + <code>valid_from</code>/<code>valid_to</code>/<code>is_current</code>, and Type 1 = overwrite in place.</p>
+      </div>
+
+      <h3 id="streaming-patterns">Designing a streaming loading pattern</h3>
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+flowchart LR
+  SRC["Event sources<br/>Event Hubs · IoT Hub · Kafka · custom app · CDC"] --> ES["Eventstream<br/>route, filter, transform"]
+  ES --> EH["Eventhouse / KQL DB<br/>hot path, sub-second query"]
+  ES --> LH["Lakehouse Delta table<br/>warm path, joins with batch"]
+  ES --> ACT["Activator<br/>rules and alerts"]
+  LH --> SSS["Spark structured streaming<br/>enrich, aggregate"]
+        </div>
+        <div class="mm-cap">A stream commonly fans out: Eventhouse for immediate analytics, Lakehouse for durable history, Activator for reaction.</div>
+      </div>
+      <p><strong>Hot / warm / cold</strong> is the design vocabulary: the hot path optimizes for latency (Eventhouse), the warm path for joinability and durability (Lakehouse Delta), the cold path for cheap long-term retention (OneLake, possibly reached via shortcut).</p>
+
+      <!-- ============================================================= -->
+      <h2 id="batch"><span class="num">2.2</span> Ingest and transform batch data</h2>
+
+      <h3 id="store-choice">Choosing an appropriate data store</h3>
+      <p>Covered in depth on the <a href="../fabric-foundations/#engines">foundations page</a>. The one-line rule: <strong>T-SQL writes → Warehouse</strong>; <strong>Spark, files, mixed workloads → Lakehouse</strong>; <strong>high-volume events and time-series → Eventhouse</strong>.</p>
+
+      <h3 id="tool-choice">Choosing between Dataflow Gen2, notebooks, KQL and T-SQL</h3>
+      <div class="table-wrap">
+        <table class="tbl t-teal">
+          <thead><tr><th>Choose…</th><th>When the stem says…</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Dataflow Gen2</strong></td><td>"analyst", "no-code / low-code", "Power Query", "many SaaS connectors", "reuse existing Power BI dataflow logic"</td></tr>
+            <tr><td><strong>Notebook (PySpark)</strong></td><td>"hundreds of millions of rows", "complex logic", "machine learning", "custom Python libraries", "code-first"</td></tr>
+            <tr><td><strong>T-SQL in a Warehouse</strong></td><td>"stored procedure", "SQL developers", "CTAS", "multi-table transaction", "data already in the Warehouse"</td></tr>
+            <tr><td><strong>KQL</strong></td><td>"Eventhouse", "telemetry / logs", "time-series", "real-time", "update policy at ingestion"</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout tip">
+        <p class="ct-title">Dataflow Gen2 details worth knowing</p>
+        <p>Gen2 improves on Power BI dataflows (Gen1) by adding explicit <strong>data destinations</strong> — Lakehouse, Warehouse, KQL database, Azure SQL — plus Git/CI-CD support and better refresh monitoring. <strong>Staging</strong> is enabled by default: data lands in a staging Lakehouse so heavy transformations can be pushed down to the SQL/Spark engine rather than evaluated in the mashup engine.</p>
+      </div>
+
+      <h3 id="shortcuts">Creating and managing OneLake shortcuts</h3>
+      <p>Fundamentals are on the <a href="../fabric-foundations/#shortcuts">foundations page</a>. What matters operationally:</p>
+      <ul>
+        <li>Create under a Lakehouse's <code>Tables/</code> (the target must be a valid Delta table folder) or <code>Files/</code> (any folder).</li>
+        <li>External shortcuts need a <strong>connection</strong> with credentials — organizational account, service principal, SAS or account key depending on target.</li>
+        <li>Deleting a shortcut removes the pointer only; the source data is untouched. Deleting the <em>source</em> leaves a broken shortcut.</li>
+        <li>Shortcuts <strong>can be chained</strong> (a shortcut to a shortcut), which adds latency and makes troubleshooting harder.</li>
+        <li>Shortcut data is <strong>excluded from OPTIMIZE and VACUUM</strong> on the hosting Lakehouse.</li>
+      </ul>
+
+      <h3 id="mirroring">Implementing mirroring</h3>
+      <p><strong>Mirroring</strong> continuously replicates an external database into OneLake as Delta tables, using the source's change feed. It is near real-time, <strong>one-way</strong>, and the replicated storage is free of extra charge within your capacity's allowance.</p>
+      <div class="table-wrap">
+        <table class="tbl t-teal">
+          <thead><tr><th>Source</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Azure SQL Database</strong></td><td>The reference implementation; requires change feed/CDC prerequisites on the source</td></tr>
+            <tr><td><strong>Azure SQL Managed Instance</strong></td><td>Same model as Azure SQL DB</td></tr>
+            <tr><td><strong>SQL Server</strong></td><td>Including on-premises / VM editions</td></tr>
+            <tr><td><strong>Azure Cosmos DB</strong></td><td>Uses the container change feed</td></tr>
+            <tr><td><strong>Snowflake</strong></td><td>Cross-platform mirroring</td></tr>
+            <tr><td><strong>Azure Database for PostgreSQL / MySQL</strong></td><td>Open-source engines</td></tr>
+            <tr><td><strong>Azure Databricks (Unity Catalog)</strong></td><td>Catalog-level mirroring of Databricks tables</td></tr>
+            <tr><td><strong>Open mirroring</strong></td><td>Bring-your-own: land change data in the prescribed format and Fabric materializes it as a mirrored database</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout warn">
+        <p class="ct-title">Verify the source list before exam day</p>
+        <p>Mirroring's supported sources expand frequently and individual sources move between preview and GA. Treat the table above as the shape of the answer, and check the current <a href="https://learn.microsoft.com/en-us/fabric/database/mirrored-database/overview" target="_blank" rel="noopener">Fabric mirroring documentation</a> for status.</p>
+      </div>
+      <div class="callout exam">
+        <p class="ct-title">Caveat — mirroring vs shortcut vs copy</p>
+        <p><strong>Mirroring</strong> replicates continuously via CDC — pick it for "near real-time replica of an operational database without building ETL". <strong>Shortcut</strong> copies nothing and reads live — pick it for "query the data where it already lives in a lake". <strong>Copy activity / Copy job</strong> moves a batch on a schedule. Mirroring is <strong>one-way</strong>: nothing you do in OneLake flows back to the source, and the mirrored tables are <strong>read-only</strong> in Fabric.</p>
+      </div>
+
+      <h3 id="pipelines">Ingesting data with pipelines</h3>
+      <div class="table-wrap">
+        <table class="tbl t-teal">
+          <thead><tr><th>Aspect</th><th>Detail</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Copy activity</strong></td><td>The workhorse: source → sink with optional mapping, staging and fault tolerance</td></tr>
+            <tr><td><strong>Sinks</strong></td><td>Lakehouse (<code>Tables/</code> or <code>Files/</code>), Warehouse, KQL database, Azure stores</td></tr>
+            <tr><td><strong>Formats</strong></td><td>Delta, Parquet, CSV, JSON, Avro, ORC, XML</td></tr>
+            <tr><td><strong>Copy behaviour</strong></td><td>Append, overwrite, or merge depending on sink type</td></tr>
+            <tr><td><strong>Staging</strong></td><td>Two-stage copy through interim storage — used for large or cross-region transfers and for sinks needing bulk load</td></tr>
+            <tr><td><strong>Fault tolerance</strong></td><td>Skip incompatible rows and log them rather than failing the activity</td></tr>
+            <tr><td><strong>Parallelism</strong></td><td>Degree of copy parallelism and partition options on the source</td></tr>
+            <tr><td><strong>On-premises sources</strong></td><td>Require the <strong>on-premises data gateway</strong>; VNet sources use the VNet data gateway</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout note">
+        <p class="ct-title">Copy job vs Copy activity</p>
+        <p>A <strong>Copy job</strong> is a standalone item that wraps the same engine with a simplified experience and first-class <strong>incremental copy</strong> — no pipeline authoring required. Use a <strong>Copy activity</strong> inside a pipeline when the copy is one step of a larger orchestrated flow.</p>
+      </div>
+
+      <h3 id="transform">Transforming with PySpark, SQL and KQL</h3>
+
+      <div class="code-block"><span class="lang">PySpark · read, clean, write</span><pre class="code"><code><span class="kw">from</span> pyspark.sql.functions <span class="kw">import</span> col, year, month, sum <span class="kw">as</span> _sum, count
+
+df = spark.read.format(<span class="st">"delta"</span>).load(<span class="st">"Tables/bronze_sales"</span>)
+
+clean = (df
+    .filter(col(<span class="st">"amount"</span>) &gt; 0)
+    .withColumn(<span class="st">"order_year"</span>, year(<span class="st">"order_date"</span>))
+    .withColumn(<span class="st">"order_month"</span>, month(<span class="st">"order_date"</span>))
+    .dropDuplicates([<span class="st">"order_id"</span>]))
+
+clean.write.format(<span class="st">"delta"</span>).mode(<span class="st">"overwrite"</span>) \
+     .option(<span class="st">"overwriteSchema"</span>, <span class="st">"true"</span>) \
+     .saveAsTable(<span class="st">"silver_sales"</span>)
+
+<span class="cm"># Group and aggregate</span>
+agg = (clean.groupBy(<span class="st">"order_year"</span>, <span class="st">"order_month"</span>, <span class="st">"region"</span>)
+            .agg(_sum(<span class="st">"amount"</span>).alias(<span class="st">"total_amount"</span>),
+                 count(<span class="st">"*"</span>).alias(<span class="st">"order_count"</span>)))</code></pre></div>
+
+      <div class="code-block"><span class="lang">T-SQL · CTAS in a Warehouse</span><pre class="code"><code><span class="cm">-- CTAS is the preferred bulk-transform pattern in a Fabric Warehouse</span>
+CREATE TABLE gold.monthly_sales AS
+SELECT
+    YEAR(order_date)  AS sale_year,
+    MONTH(order_date) AS sale_month,
+    region,
+    SUM(amount)       AS total_amount,
+    COUNT_BIG(*)      AS order_count
+FROM   silver.sales
+WHERE  amount &gt; 0
+GROUP BY YEAR(order_date), MONTH(order_date), region;</code></pre></div>
+
+      <div class="code-block"><span class="lang">KQL · aggregate in an Eventhouse</span><pre class="code"><code>SensorReadings
+| <span class="kw">where</span> Timestamp &gt; ago(7d)
+| <span class="kw">summarize</span> AvgTemp = avg(Temperature),
+            MaxTemp = max(Temperature),
+            Readings = count()
+    <span class="kw">by</span> bin(Timestamp, 1h), DeviceId
+| <span class="kw">order by</span> Timestamp <span class="kw">desc</span></code></pre></div>
+
+      <div class="callout exam">
+        <p class="ct-title">Caveat — overwrite vs overwriteSchema</p>
+        <p><code>mode("overwrite")</code> replaces the <em>data</em> but still enforces the existing schema — a changed column set fails. Adding <code>.option("overwriteSchema","true")</code> replaces the schema too. For <em>additive</em> changes prefer <code>.option("mergeSchema","true")</code>, which appends new columns without discarding the old definition.</p>
+      </div>
+
+      <h3 id="denormalize">Denormalizing, grouping and aggregating</h3>
+      <div class="table-wrap">
+        <table class="tbl t-teal">
+          <thead><tr><th>Technique</th><th>What it does</th><th>Use when</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Flatten / join down</strong></td><td>Pull dimension attributes onto the fact row</td><td>Reducing joins at query time for BI performance</td></tr>
+            <tr><td><strong>Explode / flatten nested</strong></td><td><code>explode()</code> arrays, dot-notation for structs</td><td>Semi-structured JSON landing in bronze</td></tr>
+            <tr><td><strong>Pre-aggregate</strong></td><td>Materialize summary tables at a coarser grain</td><td>Dashboards repeatedly computing the same rollup</td></tr>
+            <tr><td><strong>Pivot / unpivot</strong></td><td>Rotate rows to columns and back</td><td>Reshaping for reporting</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout tip">
+        <p class="ct-title">Denormalization is a trade</p>
+        <p>You buy read speed with storage and update complexity: once an attribute is copied onto millions of fact rows, changing it means rewriting them. That is precisely why SCD Type 2 dimensions exist — keep the history in the dimension, keep the fact narrow.</p>
+      </div>
+
+      <h3 id="data-quality">Handling duplicate, missing and late-arriving data</h3>
+      <div class="table-wrap">
+        <table class="tbl t-teal">
+          <thead><tr><th>Problem</th><th>Batch approach</th><th>Streaming approach</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Duplicates</strong></td><td><code>dropDuplicates([keys])</code>, or window <code>row_number()</code> keeping the latest; MERGE on the business key</td><td><code>dropDuplicates</code> with a watermark to bound state</td></tr>
+            <tr><td><strong>Missing values</strong></td><td><code>fillna()</code> / <code>COALESCE()</code>, defaults, or drop when the column is critical</td><td>Same, applied per micro-batch</td></tr>
+            <tr><td><strong>Late-arriving facts</strong></td><td>MERGE into the correct partition and recompute affected aggregates</td><td><code>withWatermark()</code> defines how long to accept late events</td></tr>
+            <tr><td><strong>Late-arriving dimensions</strong></td><td>Insert an <strong>inferred member</strong> (placeholder dimension row) so the fact can load, then update it when the real record arrives</td><td>—</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="code-block"><span class="lang">PySpark · deduplicate keeping the latest version</span><pre class="code"><code><span class="kw">from</span> pyspark.sql.window <span class="kw">import</span> Window
+<span class="kw">from</span> pyspark.sql.functions <span class="kw">import</span> row_number, col, coalesce, lit
+
+w = Window.partitionBy(<span class="st">"order_id"</span>).orderBy(col(<span class="st">"modified_at"</span>).desc())
+
+latest = (df.withColumn(<span class="st">"rn"</span>, row_number().over(w))
+            .filter(col(<span class="st">"rn"</span>) == 1)
+            .drop(<span class="st">"rn"</span>))
+
+<span class="cm"># Fill missing values with a sensible default</span>
+filled = latest.withColumn(<span class="st">"region"</span>, coalesce(col(<span class="st">"region"</span>), lit(<span class="st">"UNKNOWN"</span>)))</code></pre></div>
+
+      <div class="callout exam">
+        <p class="ct-title">Caveat — dropDuplicates vs row_number</p>
+        <p><code>dropDuplicates(["order_id"])</code> keeps an <strong>arbitrary</strong> row from each group — non-deterministic and wrong when you need "the most recent version". Use a <strong>window with <code>row_number()</code> ordered by the timestamp</strong> when the choice of surviving row matters. This distinction is very exam-friendly.</p>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="streaming"><span class="num">2.3</span> Ingest and transform streaming data</h2>
+
+      <h3 id="engine-choice">Choosing an appropriate streaming engine</h3>
+      <div class="table-wrap">
+        <table class="tbl t-teal">
+          <thead><tr><th>Dimension</th><th>Eventstream</th><th>Spark structured streaming</th><th>KQL / Eventhouse</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Authoring</strong></td><td>No-code visual designer</td><td>PySpark in a notebook</td><td>KQL queries and update policies</td></tr>
+            <tr><td><strong>Primary role</strong></td><td><strong>Ingest and route</strong></td><td><strong>Transform and enrich</strong></td><td><strong>Store and analyse</strong></td></tr>
+            <tr><td><strong>Latency</strong></td><td>Seconds</td><td>Seconds to minutes (micro-batch)</td><td>Seconds</td></tr>
+            <tr><td><strong>Join with large batch data</strong></td><td>Limited</td><td>✅ Full Spark joins</td><td>Via shortcuts / materialized views</td></tr>
+            <tr><td><strong>Windowing</strong></td><td>Tumbling, hopping, sliding, session, snapshot</td><td>Tumbling, sliding, session</td><td>Full, via <code>bin()</code> and time functions</td></tr>
+            <tr><td><strong>Destinations</strong></td><td>Eventhouse, Lakehouse, Activator, custom endpoint, derived stream</td><td>Delta tables in a Lakehouse</td><td>KQL tables</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout tip">
+        <p class="ct-title">They compose — the question is which one does the work</p>
+        <p>The common production shape is <strong>Eventstream ingests and routes → Eventhouse serves real-time queries and Lakehouse holds durable history → Spark or KQL transforms</strong>. If a question asks for <em>no-code routing to multiple destinations</em> → Eventstream. <em>Enrich the stream by joining a 500 M-row dimension</em> → Spark structured streaming. <em>Dashboard over the last 24 hours of telemetry</em> → KQL on an Eventhouse.</p>
+      </div>
+
+      <h3 id="rti-storage">Native tables vs OneLake shortcuts in Real-Time Intelligence</h3>
+      <div class="table-wrap">
+        <table class="tbl t-teal">
+          <thead><tr><th>Aspect</th><th>Native KQL table</th><th>OneLake shortcut in the Eventhouse</th></tr></thead>
+          <tbody>
+            <tr><td>Where the data lives</td><td>Eventhouse's own optimized storage</td><td>OneLake (or external), read in place</td></tr>
+            <tr><td>Ingestion</td><td>Data is ingested and indexed</td><td>None — nothing is copied</td></tr>
+            <tr><td>Query performance</td><td><strong>Fastest</strong> — full indexing and caching</td><td>Slower — reads Delta/Parquet across services</td></tr>
+            <tr><td>Storage cost</td><td>A second copy of the data</td><td>No duplication</td></tr>
+            <tr><td>Best for</td><td><strong>Hot path</strong>: active real-time analytics and alerting</td><td><strong>Warm/cold path</strong>: historical lookups, joining to lake data</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>Query acceleration for OneLake shortcuts</h4>
+      <p>Query acceleration adds a <strong>cached, indexed copy</strong> of shortcut data inside the Eventhouse so KQL queries over it approach native-table speed.</p>
+      <div class="table-wrap">
+        <table class="tbl t-teal">
+          <thead><tr><th></th><th>Standard shortcut</th><th>Query-accelerated shortcut</th></tr></thead>
+          <tbody>
+            <tr><td>Performance</td><td>Reads OneLake directly on every query</td><td>Served from the acceleration cache</td></tr>
+            <tr><td>Capacity cost</td><td>Query cost only</td><td><strong>Additional CU and storage</strong> for the cache</td></tr>
+            <tr><td>Freshness</td><td>Always current</td><td>Slight lag while the cache catches up</td></tr>
+            <tr><td>Choose when</td><td>Infrequent or ad-hoc queries on cold data</td><td>Frequent, latency-sensitive queries on shortcut data</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout exam">
+        <p class="ct-title">Caveat — the three-way choice</p>
+        <p>Fabric gives you an explicit trade-off ladder: <strong>native table</strong> (fastest, duplicates data, ingestion required) → <strong>accelerated shortcut</strong> (fast, extra CU + slight lag, no ingestion pipeline) → <strong>standard shortcut</strong> (cheapest, slowest, always fresh). Match the answer to whichever of <em>speed</em>, <em>cost</em> or <em>freshness</em> the stem prioritizes. Query acceleration has a configurable retention window — it accelerates recent data, not unbounded history.</p>
+      </div>
+
+      <h3 id="eventstreams">Processing data with Eventstreams</h3>
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+flowchart LR
+  SRC["Sources<br/>Event Hubs · IoT Hub · Kafka<br/>CDC · custom app · sample data"] --> ES["Eventstream"]
+  ES --> OPS["Event processor<br/>filter · manage fields · expand<br/>join · group by · aggregate · union"]
+  OPS --> D1["Eventhouse"]
+  OPS --> D2["Lakehouse"]
+  OPS --> D3["Activator"]
+  OPS --> D4["Derived stream / custom endpoint"]
+        </div>
+        <div class="mm-cap">Eventstream in edit mode: sources on the left, no-code processing in the middle, one or many destinations on the right.</div>
+      </div>
+      <ul>
+        <li><strong>Sources</strong> include Azure Event Hubs, IoT Hub, Kafka, database CDC feeds, Azure service events, sample data, and custom endpoints.</li>
+        <li><strong>Processing operators</strong>: filter, manage fields, expand (flatten arrays), join, union, group by, aggregate.</li>
+        <li><strong>Destinations</strong>: Eventhouse, Lakehouse, Activator, derived stream, custom endpoint.</li>
+        <li>A stream can fan out to <strong>multiple destinations</strong> from the same source — a very common exam framing.</li>
+        <li>Eventhouse destinations support <strong>direct ingestion</strong> (raw) or <strong>event-processing-before-ingestion</strong>.</li>
+      </ul>
+
+      <h3 id="spark-streaming">Processing data with Spark structured streaming</h3>
+      <div class="code-block"><span class="lang">PySpark · structured streaming with watermark</span><pre class="code"><code><span class="kw">from</span> pyspark.sql.functions <span class="kw">import</span> window, avg, count
+
+stream = (spark.readStream
+    .format(<span class="st">"delta"</span>)
+    .option(<span class="st">"readChangeFeed"</span>, <span class="st">"true"</span>)
+    .table(<span class="st">"bronze_events"</span>))
+
+agg = (stream
+    .withWatermark(<span class="st">"event_time"</span>, <span class="st">"10 minutes"</span>)     <span class="cm"># tolerate 10 min of lateness</span>
+    .groupBy(window(<span class="st">"event_time"</span>, <span class="st">"5 minutes"</span>), <span class="st">"device_id"</span>)
+    .agg(avg(<span class="st">"temperature"</span>).alias(<span class="st">"avg_temp"</span>),
+         count(<span class="st">"*"</span>).alias(<span class="st">"event_count"</span>)))
+
+(agg.writeStream
+    .format(<span class="st">"delta"</span>)
+    .outputMode(<span class="st">"append"</span>)
+    .option(<span class="st">"checkpointLocation"</span>, <span class="st">"Files/checkpoints/sensor_agg"</span>)
+    .trigger(processingTime=<span class="st">"1 minute"</span>)
+    .toTable(<span class="st">"silver_sensor_agg"</span>))</code></pre></div>
+
+      <div class="table-wrap">
+        <table class="tbl t-teal">
+          <thead><tr><th>Output mode</th><th>Writes</th><th>Requires</th></tr></thead>
+          <tbody>
+            <tr><td><strong>append</strong></td><td>Only new rows, never revised</td><td>A watermark for aggregations — results emit when the window closes</td></tr>
+            <tr><td><strong>update</strong></td><td>Only rows that changed this batch</td><td>Sink that supports updates</td></tr>
+            <tr><td><strong>complete</strong></td><td>The entire result table, every batch</td><td>Aggregations only; state grows unbounded without a watermark</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout exam">
+        <p class="ct-title">Caveat — checkpoints and watermarks are non-negotiable</p>
+        <p><strong>Checkpoint location</strong> is mandatory for fault tolerance: it stores stream offsets and aggregation state so a restarted job resumes exactly where it stopped. Deleting or sharing a checkpoint directory between two different streams corrupts that state — each stream needs its own. <strong>Watermarks</strong> bound how long state is retained for late events; without one, a stateful aggregation's state grows forever until the job fails on memory. "Streaming job memory grows until it crashes" → missing watermark.</p>
+      </div>
+
+      <h3 id="windowing">Windowing functions</h3>
+      <div class="table-wrap">
+        <table class="tbl t-teal">
+          <thead><tr><th>Window</th><th>Shape</th><th>Typical question</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Tumbling</strong></td><td>Fixed size, <strong>non-overlapping</strong>, contiguous</td><td>"Count events in each 5-minute block"</td></tr>
+            <tr><td><strong>Hopping</strong></td><td>Fixed size, advances by a <strong>hop</strong> — overlaps when hop &lt; size</td><td>"Average over 10 minutes, reported every 5"</td></tr>
+            <tr><td><strong>Sliding</strong></td><td>Emits whenever an event enters or leaves the window</td><td>"Continuously updated moving average"</td></tr>
+            <tr><td><strong>Session</strong></td><td>Variable length, closed by an <strong>inactivity gap</strong></td><td>"Group a user's clicks until 30 minutes idle"</td></tr>
+            <tr><td><strong>Snapshot</strong></td><td>Groups events sharing the exact same timestamp</td><td>"Aggregate all readings at the same instant"</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="code-block"><span class="lang">KQL · windowing</span><pre class="code"><code><span class="cm">// Tumbling: bin() rounds each timestamp down to the window start</span>
+SensorReadings
+| <span class="kw">summarize</span> Events = count(), AvgTemp = avg(Temperature)
+    <span class="kw">by</span> bin(Timestamp, 5m), DeviceId
+
+<span class="cm">// Hopping: 15-minute window reported every 5 minutes</span>
+SensorReadings
+| <span class="kw">extend</span> WindowStart = bin(Timestamp, 5m)
+| <span class="kw">summarize</span> AvgTemp = avg(Temperature)
+    <span class="kw">by</span> WindowStart, DeviceId
+| <span class="kw">order by</span> WindowStart <span class="kw">asc</span></code></pre></div>
+
+      <div class="callout exam">
+        <p class="ct-title">Caveat — tumbling vs hopping vs sliding</p>
+        <p>An event belongs to <strong>exactly one tumbling window</strong>; it can belong to <strong>several hopping or sliding windows</strong>. If a stem says "each event must be counted once", the answer is <strong>tumbling</strong>. If it says "updated every N minutes over the last M minutes" with N &lt; M, that is <strong>hopping</strong>. A hopping window whose hop equals its size <em>is</em> a tumbling window.</p>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="scenarios">Scenario quick reference</h2>
+      <div class="table-wrap">
+        <table class="tbl">
+          <thead><tr><th>Scenario</th><th>Deciding constraint</th><th>Answer</th></tr></thead>
+          <tbody>
+            <tr><td>Load only rows changed since last night</td><td>Change detection</td><td><strong>Watermark + MERGE</strong></td></tr>
+            <tr><td>Re-running the failed load created duplicates</td><td>Idempotency</td><td><strong>MERGE on the business key</strong>, not append</td></tr>
+            <tr><td>Keep full history of customer address changes</td><td>History</td><td><strong>SCD Type 2</strong> (valid_from/valid_to/is_current)</td></tr>
+            <tr><td>Correct a typo in a product name, no history needed</td><td>Overwrite</td><td><strong>SCD Type 1</strong></td></tr>
+            <tr><td>Keep only the newest row per key</td><td>Deterministic dedup</td><td><strong><code>row_number()</code> over a window</strong></td></tr>
+            <tr><td>Near real-time copy of Azure SQL DB, no ETL</td><td>Continuous CDC</td><td><strong>Mirroring</strong></td></tr>
+            <tr><td>Query S3 data without copying it</td><td>No duplication</td><td><strong>OneLake shortcut</strong></td></tr>
+            <tr><td>Simple recurring incremental copy, no pipeline needed</td><td>Simplicity</td><td><strong>Copy job</strong></td></tr>
+            <tr><td>Ingest from an on-premises SQL Server</td><td>Network reach</td><td><strong>On-premises data gateway</strong></td></tr>
+            <tr><td>Analyst must build the transform with no code</td><td>Persona</td><td><strong>Dataflow Gen2</strong></td></tr>
+            <tr><td>Join a stream to a huge batch dimension</td><td>Join scale</td><td><strong>Spark structured streaming</strong></td></tr>
+            <tr><td>Route one stream to Eventhouse and Lakehouse</td><td>Fan-out, no code</td><td><strong>Eventstream, two destinations</strong></td></tr>
+            <tr><td>Sub-second queries over shortcut data in RTI</td><td>Speed over freshness</td><td><strong>Query acceleration</strong></td></tr>
+            <tr><td>Count each event exactly once per 5 minutes</td><td>No overlap</td><td><strong>Tumbling window</strong></td></tr>
+            <tr><td>Rolling 15-min average refreshed every 5 min</td><td>Overlap</td><td><strong>Hopping window</strong></td></tr>
+            <tr><td>Group activity until 30 minutes of inactivity</td><td>Gap-based</td><td><strong>Session window</strong></td></tr>
+            <tr><td>Streaming job's memory grows until it fails</td><td>Unbounded state</td><td><strong>Add <code>withWatermark()</code></strong></td></tr>
+            <tr><td>Restarted stream reprocessed everything</td><td>Lost offsets</td><td><strong>Checkpoint location</strong> missing or deleted</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="pager">
+        <a class="prev" href="../domain-1-implement-manage/"><div class="pg-dir">← Previous</div><div class="pg-title">Domain 1 · Implement &amp; manage</div></a>
+        <a class="next" href="../domain-3-monitor-optimize/"><div class="pg-dir">Next →</div><div class="pg-title">Domain 3 · Monitor &amp; optimize</div></a>
+      </div>
+
+    </main>
+  </div>
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

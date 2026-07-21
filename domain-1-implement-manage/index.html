@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Domain 1 · Implement &amp; Manage an Analytics Solution — DP-700</title>
+  <meta name="description" content="DP-700 Domain 1 study notes: Spark, domain, OneLake and Apache Airflow workspace settings; Git version control, database projects and deployment pipelines; workspace, item, row, column, object and folder-level security; dynamic data masking, sensitivity labels, endorsement, audit logs, OneLake security and orchestration.">
+  <meta name="author" content="Marco Grimaldi">
+  <link rel="canonical" href="https://marcogrimaldi29.com/dp-700-study-notes-v2/domain-1-implement-manage/">
+  <meta name="robots" content="index, follow">
+  <meta name="theme-color" content="#5c2d91">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="DP-700 Study Notes v2">
+  <meta property="og:title" content="DP-700 Domain 1 · Implement and manage an analytics solution">
+  <meta property="og:description" content="Workspace settings including Apache Airflow, lifecycle management, the full Fabric security stack, and orchestration patterns.">
+  <meta property="og:url" content="https://marcogrimaldi29.com/dp-700-study-notes-v2/domain-1-implement-manage/">
+  <meta property="og:image" content="https://marcogrimaldi29.com/dp-700-study-notes-v2/assets/images/site-mark-no-bg.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="DP-700 Domain 1 · Implement and manage an analytics solution">
+  <meta name="twitter:description" content="Workspace settings, lifecycle management, security and governance, orchestration.">
+  <meta name="twitter:image" content="https://marcogrimaldi29.com/dp-700-study-notes-v2/assets/images/site-mark-no-bg.png">
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@graph":[{"@type":"TechArticle","headline":"DP-700 Domain 1 · Implement and manage an analytics solution","description":"Workspace settings including Apache Airflow, lifecycle management, the full Fabric security stack, and orchestration patterns.","inLanguage":"en","url":"https://marcogrimaldi29.com/dp-700-study-notes-v2/domain-1-implement-manage/","author":{"@type":"Person","name":"Marco Grimaldi","url":"https://marcogrimaldi29.com/"},"isPartOf":"https://marcogrimaldi29.com/dp-700-study-notes-v2/"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"DP-700 Study Notes v2","item":"https://marcogrimaldi29.com/dp-700-study-notes-v2/"},{"@type":"ListItem","position":2,"name":"Domain 1 · Implement and manage","item":"https://marcogrimaldi29.com/dp-700-study-notes-v2/domain-1-implement-manage/"}]}]}
+  </script>
+  <link rel="icon" href="../assets/images/site-mark-no-bg.png">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body data-page="implement">
+  <div class="layout" style="--accent:var(--d1)">
+
+    <aside class="toc"><h4>On this page</h4><nav id="toc-list"></nav></aside>
+
+    <main class="content">
+      <div class="page-head">
+        <div class="kicker">Domain 1 · 30–35%</div>
+        <h1>Implement and manage an analytics solution</h1>
+        <p>The platform-engineering third of the exam: configuring the workspace, moving code safely between environments, locking data down at six different layers, and choosing the right orchestration tool.</p>
+      </div>
+
+      <div class="card">
+        <strong>Four objectives:</strong>
+        <ul style="margin-bottom:0">
+          <li><a href="#workspace-settings">1.1 Configure workspace settings</a> — Spark, domain, OneLake, <strong>Apache Airflow</strong></li>
+          <li><a href="#lifecycle">1.2 Lifecycle management</a> — version control, database projects, deployment pipelines</li>
+          <li><a href="#security">1.3 Security &amp; governance</a> — workspace/item/row/column/object/folder access, DDM, labels, endorsement, audit logs, OneLake security</li>
+          <li><a href="#orchestration">1.4 Orchestrate processes</a> — tool choice, schedules and event triggers, parameters and dynamic expressions</li>
+        </ul>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="workspace-settings"><span class="num">1.1</span> Configure Microsoft Fabric workspace settings</h2>
+
+      <p>Workspace settings are reached from the workspace → <strong>Workspace settings</strong>. The four groups the exam names explicitly are Spark, domain, OneLake and Apache Airflow.</p>
+
+      <h3 id="spark-settings">Spark workspace settings</h3>
+      <div class="table-wrap">
+        <table class="tbl t-purple">
+          <thead><tr><th>Setting</th><th>What it controls</th><th>Why it matters</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Runtime version</strong></td><td>The bundled Spark / Python / Delta versions</td><td>Pinning a runtime keeps library compatibility stable across notebooks</td></tr>
+            <tr><td><strong>Starter pool</strong></td><td>Pre-warmed, Microsoft-managed Spark nodes</td><td>Session starts in <strong>seconds</strong> instead of minutes — the default</td></tr>
+            <tr><td><strong>Custom pool</strong></td><td>Node size, min/max nodes, autoscale, dynamic executor allocation</td><td>Right-sizing compute for a specific workload; required when you need larger nodes</td></tr>
+            <tr><td><strong>Environment</strong></td><td>Libraries (PyPI/conda/<code>.whl</code>/<code>.jar</code>), Spark properties, resource files</td><td>Reusable dependency bundle attached to notebooks and Spark job definitions</td></tr>
+            <tr><td><strong>Native execution engine</strong></td><td>Vectorized C++ execution for supported operators</td><td>Large speed-up; unsupported operators silently <strong>fall back</strong> to standard Spark</td></tr>
+            <tr><td><strong>High concurrency mode</strong></td><td>Multiple notebooks share one Spark session</td><td>Cuts CU burn and start-up time when several users work at once</td></tr>
+            <tr><td><strong>Autologging / job admission</strong></td><td>MLflow autologging; optimistic job admission</td><td>Affects how many concurrent jobs the capacity will admit</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout exam">
+        <p class="ct-title">Caveat — starter pool vs custom pool</p>
+        <p><strong>Starter pools</strong> win on start-up latency because the nodes are already warm, but you cannot change their node size. Creating a <strong>custom pool</strong> gives you control over node size and autoscale at the cost of a cold start (a few minutes) while nodes provision. "Notebook takes ~3 minutes to start" → they are on a custom pool; switch to a starter pool. "Job OOMs on the default nodes" → custom pool with a larger node size.</p>
+      </div>
+
+      <h3 id="domain-settings">Domain workspace settings</h3>
+      <p><strong>Domains</strong> group workspaces by business area to enable federated governance — the central Fabric admin delegates authority to domain admins who know their own data.</p>
+      <ul>
+        <li>Created and managed by the Fabric admin in the <strong>admin portal → Domains</strong>; workspaces are then assigned to a domain (individually, in bulk, or by workspace admin).</li>
+        <li><strong>Subdomains</strong> allow a second level of grouping under a domain.</li>
+        <li><strong>Domain admins</strong> manage the domain's settings, image and default label; <strong>domain contributors</strong> can assign their own workspaces into it.</li>
+        <li>Domains drive <strong>discovery</strong> — data in the OneLake catalog / data hub can be browsed and filtered by domain.</li>
+        <li>Certain governance defaults (such as a default sensitivity label or certification policy) can be scoped per domain.</li>
+      </ul>
+
+      <h3 id="onelake-settings">OneLake workspace settings</h3>
+      <div class="table-wrap">
+        <table class="tbl t-purple">
+          <thead><tr><th>Setting</th><th>Effect</th></tr></thead>
+          <tbody>
+            <tr><td><strong>OneLake access (ADLS Gen2 API)</strong></td><td>Whether tools that speak the ADLS Gen2 API — Azure Storage Explorer, OneLake file explorer, third-party clients — can address the workspace's data directly</td></tr>
+            <tr><td><strong>Users can access data stored in OneLake with apps external to Fabric</strong></td><td>Turning this <strong>off</strong> forces all access through Fabric items and blocks direct external connections</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout warn">
+        <p class="ct-title">Symptom to recognise</p>
+        <p>"Storage Explorer / a third-party tool suddenly gets access denied against OneLake, but everything works inside Fabric." That is the external-access workspace (or tenant) setting being disabled — not a permissions problem on the item.</p>
+      </div>
+
+      <h3 id="airflow-settings">Apache Airflow workspace settings <span class="pill p-purple">New in the July 2026 outline</span></h3>
+      <p><strong>Apache Airflow job</strong> is Fabric's managed Airflow offering — you author DAGs in Python and Fabric runs them, giving you Airflow's dependency graph, retries, sensors and operator ecosystem alongside native Fabric items.</p>
+      <p>Configure the runtime at <strong>Workspace settings → Data Factory → Apache Airflow Runtime Settings</strong>:</p>
+      <div class="table-wrap">
+        <table class="tbl t-purple">
+          <thead><tr><th>Setting</th><th>Options / meaning</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Pool type</strong></td><td><strong>Starter pool</strong> (default, pre-configured) or <strong>Custom pool</strong></td></tr>
+            <tr><td><strong>Compute node size</strong></td><td><strong>Small</strong> for simple DAGs, <strong>Large</strong> for complex or production DAGs</td></tr>
+            <tr><td><strong>Enable autoscale</strong></td><td>Lets the Airflow pool scale nodes up and down with demand</td></tr>
+            <tr><td><strong>Extra nodes</strong></td><td>Raises concurrent DAG capacity — each additional node provides capacity for <strong>3 more workers</strong></td></tr>
+            <tr><td><strong>Airflow version / requirements</strong></td><td>Runtime version plus Python package requirements for the environment</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout tip">
+        <p class="ct-title">Airflow job vs Data pipeline — when to pick which</p>
+        <p>Choose a <strong>Data pipeline</strong> for Fabric-native orchestration with a visual designer, native activities and built-in triggers — it is the default answer. Choose an <strong>Apache Airflow job</strong> when the requirement mentions <strong>existing Airflow DAGs to migrate</strong>, Python-as-code DAG authoring, complex cross-system dependencies, or the Airflow operator ecosystem. Airflow jobs support <strong>workspace identity</strong> for authentication and can run Fabric items from a DAG.</p>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="lifecycle"><span class="num">1.2</span> Implement lifecycle management</h2>
+
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+flowchart LR
+  DEVWS["Dev workspace"] <-->|"commit / update"| GIT["Git repo<br/>Azure DevOps or GitHub"]
+  GIT --> PR["Branch + pull request<br/>(code review)"]
+  PR --> MAIN["main branch"]
+  DEVWS -->|"deployment pipeline"| TESTWS["Test workspace"]
+  TESTWS -->|"deployment pipeline"| PRODWS["Prod workspace"]
+        </div>
+        <div class="mm-cap">Git handles versioning and review; deployment pipelines handle promotion between environments. They are complementary, not alternatives.</div>
+      </div>
+
+      <h3 id="git">Version control with Git integration</h3>
+      <ul>
+        <li>Supported providers: <strong>Azure DevOps Repos</strong> and <strong>GitHub</strong> (including GitHub Enterprise). Other Git hosts are not natively supported.</li>
+        <li>A workspace connects to <strong>one repository, one branch and one folder</strong> at a time. Switching branches is a workspace-level action.</li>
+        <li>Core actions: <strong>Commit</strong> (workspace → Git), <strong>Update</strong> (Git → workspace), and <strong>Undo</strong> uncommitted changes. The source-control pane shows per-item status.</li>
+        <li>Items serialize to a folder per item containing its definition files (for example <code>.platform</code> plus notebook / pipeline / model definition files).</li>
+        <li><strong>Branch out to a new workspace</strong> creates an isolated workspace on a feature branch — the standard pattern for parallel development.</li>
+      </ul>
+      <div class="callout exam">
+        <p class="ct-title">Caveat — Git syncs definitions, never data</p>
+        <p>Git integration versions <strong>item definitions</strong> (notebook code, pipeline JSON, semantic model metadata, Lakehouse/Warehouse <em>schema</em> metadata). It does <strong>not</strong> version the rows in your tables or the files in <code>Files/</code>. The same is true of deployment pipelines. Any answer implying "promote the data with Git" is wrong.</p>
+      </div>
+
+      <h3 id="db-projects">Database projects</h3>
+      <p>A <strong>SQL database project</strong> is the schema-as-code approach for Fabric Warehouses: the object definitions live as <code>.sql</code> files in source control rather than existing only in the deployed database.</p>
+      <div class="table-wrap">
+        <table class="tbl t-purple">
+          <thead><tr><th>Capability</th><th>Detail</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Author</strong></td><td>VS Code with the <em>SQL Database Projects</em> extension, or Visual Studio / SSDT</td></tr>
+            <tr><td><strong>Build output</strong></td><td>A <strong>dacpac</strong> describing the desired schema state</td></tr>
+            <tr><td><strong>Schema compare</strong></td><td>Diff the project against the deployed Warehouse in either direction</td></tr>
+            <tr><td><strong>Publish / deploy</strong></td><td>Apply the project's schema to the target; automatable with <strong>SqlPackage</strong> in CI/CD</td></tr>
+            <tr><td><strong>Import</strong></td><td>Reverse-engineer an existing Warehouse into a new project to get it under source control</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout note">
+        <p class="ct-title">When a database project is the answer</p>
+        <p>Look for "declarative", "schema as code", "review schema changes in a pull request", "detect drift between environments", or "deploy the warehouse schema from a build pipeline". Deployment pipelines promote the <em>item</em>; a database project gives you object-level control and diffing of the schema inside it.</p>
+      </div>
+
+      <h3 id="deployment-pipelines">Deployment pipelines</h3>
+      <div class="table-wrap">
+        <table class="tbl t-purple">
+          <thead><tr><th>Concept</th><th>Detail</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Stages</strong></td><td>Up to <strong>10</strong>; the classic shape is Development → Test → Production. Each stage is bound to one workspace.</td></tr>
+            <tr><td><strong>Deployment rules</strong></td><td>Per-stage overrides so promoted items point at the right environment — data source rules, parameter rules, connection rules. Set on the <em>target</em> stage.</td></tr>
+            <tr><td><strong>Selective deployment</strong></td><td>Deploy a subset of items instead of everything.</td></tr>
+            <tr><td><strong>Auto-binding</strong></td><td>Dependencies between deployed items are automatically re-pointed to the target stage's copies.</td></tr>
+            <tr><td><strong>Comparison view</strong></td><td>Shows which items differ between stages before you deploy.</td></tr>
+            <tr><td><strong>Backwards deployment</strong></td><td>Possible when the target stage has no items, e.g. hydrating a new Dev from Prod.</td></tr>
+            <tr><td><strong>Automation</strong></td><td>Deployment pipeline REST APIs / Fabric CLI let you drive promotion from Azure DevOps or GitHub Actions.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout exam">
+        <p class="ct-title">Caveat — permissions and the rules trap</p>
+        <p>To deploy you need access to <strong>both</strong> the source and target workspaces (Contributor or higher on the target; Admin to manage the pipeline itself). And <strong>deployment rules live on the target stage</strong> — the single most common wrong answer is configuring the rule on the source. Without rules, a promoted pipeline or semantic model keeps pointing at the Dev data source.</p>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="security"><span class="num">1.3</span> Configure security and governance</h2>
+
+      <p>Fabric security is layered. Work top-down: a user must clear <em>every</em> layer to see a row.</p>
+
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+flowchart TD
+  T["Tenant settings<br/>(admin portal)"] --> C["Capacity settings"]
+  C --> W["Workspace roles<br/>Admin · Member · Contributor · Viewer"]
+  W --> I["Item permissions<br/>Read · ReadData · ReadAll · Write · Reshare"]
+  I --> D["Data-level controls"]
+  D --> RLS["RLS — rows"]
+  D --> CLS["CLS — columns"]
+  D --> OLS["OLS — objects in semantic models"]
+  D --> DDM["DDM — masked values"]
+  D --> FLS["OneLake data access roles — folders"]
+        </div>
+        <div class="mm-cap">Six layers. Exam questions almost always name the granularity — rows, columns, whole objects, folders — which tells you the layer.</div>
+      </div>
+
+      <h3 id="workspace-roles">Workspace-level access controls</h3>
+      <div class="table-wrap">
+        <table class="tbl t-purple">
+          <thead><tr><th>Role</th><th>Can do</th><th>Cannot do</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Admin</strong></td><td>Everything: manage the workspace, add/remove members, delete the workspace, manage all items</td><td>—</td></tr>
+            <tr><td><strong>Member</strong></td><td>Create/edit/delete items, <strong>share items</strong> and grant others access, publish apps</td><td>Delete the workspace or change its settings</td></tr>
+            <tr><td><strong>Contributor</strong></td><td>Create/edit/delete items, run notebooks and pipelines</td><td><strong>Share</strong> items or manage members</td></tr>
+            <tr><td><strong>Viewer</strong></td><td>View items and read data they are granted; run queries against SQL endpoints</td><td>Create, edit, delete, or see item definitions/code</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout exam">
+        <p class="ct-title">Caveat — Member vs Contributor</p>
+        <p>The dividing line is <strong>resharing</strong>. Both can build; only <strong>Member</strong> (and Admin) can grant other people access. "Engineers must build pipelines but must not be able to share data outward" → <strong>Contributor</strong>. Also note <strong>Viewer does not automatically mean data access</strong> to everything: Viewer can query through the SQL endpoint, but Lakehouse file access and some item data still require explicit permission.</p>
+      </div>
+
+      <h3 id="item-permissions">Item-level access controls</h3>
+      <p>Sharing an individual item grants a specific permission set. For Lakehouses and Warehouses the three read permissions are the ones to distinguish:</p>
+      <div class="table-wrap">
+        <table class="tbl t-purple">
+          <thead><tr><th>Permission</th><th>Grants</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Read</strong></td><td>See the item exists and connect to its endpoints — <em>not</em> the underlying data by itself</td></tr>
+            <tr><td><strong>ReadData</strong></td><td>Read data <strong>through the SQL analytics endpoint / Warehouse</strong>, subject to RLS, CLS and DDM</td></tr>
+            <tr><td><strong>ReadAll</strong></td><td>Read the <strong>raw files and tables in OneLake</strong> (Spark, shortcuts, external tools) — <strong>bypasses SQL-layer RLS/CLS/DDM</strong></td></tr>
+            <tr><td><strong>Write</strong></td><td>Modify the item and its data</td></tr>
+            <tr><td><strong>Reshare</strong></td><td>Pass the granted permissions on to others</td></tr>
+            <tr><td><strong>Execute / Build</strong></td><td>Run the item (jobs) or build new content on a semantic model</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout warn">
+        <p class="ct-title">ReadAll is a security hole if you rely on T-SQL controls</p>
+        <p>RLS, CLS and DDM are enforced by the <strong>SQL engine</strong>. A user with <strong>ReadAll</strong> reads the Delta files directly through Spark or OneLake and therefore <strong>sees everything, unmasked and unfiltered</strong>. If a scenario requires row filtering that holds for <em>all</em> engines, the answer is <strong>OneLake security</strong>, not T-SQL RLS — or you must withhold ReadAll.</p>
+      </div>
+
+      <h3 id="rls-cls-ols">Row-, column-, object- and folder/file-level controls</h3>
+      <div class="table-wrap">
+        <table class="tbl t-purple">
+          <thead><tr><th>Control</th><th>Granularity</th><th>Where it is defined</th><th>Mechanism</th></tr></thead>
+          <tbody>
+            <tr><td><strong>RLS</strong></td><td>Rows</td><td>Warehouse, SQL analytics endpoint</td><td><code>CREATE FUNCTION</code> predicate + <code>CREATE SECURITY POLICY</code></td></tr>
+            <tr><td><strong>RLS (semantic model)</strong></td><td>Rows</td><td>Semantic model</td><td>DAX filter expression on a model role</td></tr>
+            <tr><td><strong>CLS</strong></td><td>Columns</td><td>Warehouse, SQL analytics endpoint</td><td><code>GRANT</code> / <code>DENY SELECT</code> on named columns</td></tr>
+            <tr><td><strong>OLS</strong></td><td>Whole tables/columns, hidden entirely</td><td><strong>Semantic model only</strong></td><td>Model role with <code>None</code> on the object</td></tr>
+            <tr><td><strong>Folder/file</strong></td><td>Folders in a Lakehouse</td><td>OneLake</td><td><strong>OneLake data access roles</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="code-block"><span class="lang">T-SQL · RLS</span><pre class="code"><code><span class="cm">-- 1. Predicate function: returns a row when access is allowed</span>
+CREATE FUNCTION dbo.fn_SecurityPredicate(@Region AS nvarchar(50))
+    RETURNS TABLE
+    WITH SCHEMABINDING
+AS
+    RETURN SELECT 1 AS accessResult
+    WHERE @Region = USER_NAME()
+       OR USER_NAME() = <span class="st">'analytics-admin@contoso.com'</span>;
+GO
+
+<span class="cm">-- 2. Bind it to the table with a security policy</span>
+CREATE SECURITY POLICY dbo.SalesRegionFilter
+    ADD FILTER PREDICATE dbo.fn_SecurityPredicate(Region) ON dbo.Sales
+    WITH (STATE = ON);</code></pre></div>
+
+      <div class="code-block"><span class="lang">T-SQL · CLS</span><pre class="code"><code><span class="cm">-- Grant only the non-sensitive columns; Salary is never selectable</span>
+GRANT SELECT ON dbo.Employees(EmployeeName, Department, JobTitle)
+    TO [analyst@contoso.com];
+
+<span class="cm">-- DENY always wins over GRANT, even via role membership</span>
+DENY SELECT ON dbo.Employees(Salary) TO [analyst@contoso.com];</code></pre></div>
+
+      <div class="callout exam">
+        <p class="ct-title">Caveat — OLS is semantic-model-only</p>
+        <p><strong>Object-level security</strong> exists only in <strong>semantic models</strong>, and its distinguishing property is that restricted objects become <strong>completely invisible</strong> — they vanish from the field list rather than erroring. CLS in a Warehouse, by contrast, leaves the column visible in metadata and raises a permission error on select. "The table must not even appear to those users" → <strong>OLS</strong>.</p>
+      </div>
+
+      <h3 id="onelake-security">OneLake security</h3>
+      <p><strong>OneLake data access roles</strong> secure data at the OneLake layer, so the rule is enforced regardless of which engine reads it — Spark, T-SQL endpoint, shortcut consumer or external tool.</p>
+      <ul>
+        <li>Defined on a Lakehouse under <strong>Manage OneLake data access</strong>: create a role, select the folders/tables it covers, assign users or groups.</li>
+        <li>Permissions are <strong>additive</strong> across roles a user belongs to, and inherit down into subfolders.</li>
+        <li>A <strong>DefaultReader</strong>-style role typically maps existing workspace access; you then add narrower roles for restricted folders.</li>
+        <li>Newer OneLake security capabilities extend this to <strong>row- and column-level</strong> rules defined once at the OneLake layer and enforced across engines.</li>
+      </ul>
+      <div class="callout tip">
+        <p class="ct-title">Decision rule</p>
+        <p>Need the restriction to hold <strong>only for SQL consumers</strong>? T-SQL RLS/CLS/DDM is fine and is the simplest answer. Need it to hold for <strong>Spark and external tools too</strong>? That is <strong>OneLake security</strong>. Check the newest Microsoft docs for the current preview/GA status of the row- and column-level OneLake capabilities before relying on them.</p>
+      </div>
+
+      <h3 id="ddm">Dynamic data masking</h3>
+      <p>DDM masks values <strong>at query time</strong> in the result set. The stored data is unchanged.</p>
+      <div class="table-wrap">
+        <table class="tbl t-purple">
+          <thead><tr><th>Function</th><th>Behaviour</th><th>Example output</th></tr></thead>
+          <tbody>
+            <tr><td><code>default()</code></td><td>Full mask by data type</td><td><code>xxxx</code> for strings, <code>0</code> for numerics, <code>1900-01-01</code> for dates</td></tr>
+            <tr><td><code>email()</code></td><td>First character, then a fixed pattern</td><td><code>mXXX@XXXX.com</code></td></tr>
+            <tr><td><code>partial(prefix,padding,suffix)</code></td><td>Keeps a prefix and suffix, pads the middle</td><td><code>partial(0,"XXXX-XXXX-XXXX-",4)</code> → <code>XXXX-XXXX-XXXX-1234</code></td></tr>
+            <tr><td><code>random(low,high)</code></td><td>Random number in range (numeric columns)</td><td><code>42</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="code-block"><span class="lang">T-SQL · DDM</span><pre class="code"><code>ALTER TABLE dbo.Customers
+    ALTER COLUMN Email nvarchar(200) MASKED WITH (FUNCTION = <span class="st">'email()'</span>);
+
+ALTER TABLE dbo.Customers
+    ALTER COLUMN CreditCard varchar(19) MASKED WITH (FUNCTION = <span class="st">'partial(0,"XXXX-XXXX-XXXX-",4)'</span>);
+
+<span class="cm">-- Let a specific principal see real values</span>
+GRANT UNMASK TO [fraud-team@contoso.com];</code></pre></div>
+      <div class="callout warn">
+        <p class="ct-title">DDM is obfuscation, not a security boundary</p>
+        <p>Anyone with <strong>UNMASK</strong>, elevated database permissions, or <strong>ReadAll</strong> file access sees the real values. A determined user can also infer masked values through <code>WHERE</code> predicates, since filtering happens on the underlying data. For genuine protection use CLS (deny the column outright), OneLake security, or encryption — DDM is for casual over-the-shoulder exposure.</p>
+      </div>
+
+      <h3 id="labels-endorsement">Sensitivity labels and endorsement</h3>
+      <div class="table-wrap">
+        <table class="tbl t-purple">
+          <thead><tr><th>Feature</th><th>Purpose</th><th>Key behaviour</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Sensitivity labels</strong></td><td>Classification and protection, from <strong>Microsoft Purview Information Protection</strong></td><td>Applied to any Fabric item; <strong>inherit downstream</strong> (Lakehouse → semantic model → report) and flow into exports (Excel, PDF, PBIX) where encryption is enforced</td></tr>
+            <tr><td><strong>Promoted</strong></td><td>"This is ready for others to use"</td><td>Any item <strong>owner / workspace Member or Contributor</strong> can promote their own item</td></tr>
+            <tr><td><strong>Certified</strong></td><td>"This meets the organization's quality bar"</td><td>Only principals on the <strong>tenant/domain certification allow-list</strong> can certify</td></tr>
+            <tr><td><strong>Master data</strong></td><td>"This is the authoritative source for this entity"</td><td>Also restricted to designated certifiers</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout exam">
+        <p class="ct-title">Caveat — labels vs endorsement</p>
+        <p>They answer different questions. A <strong>sensitivity label</strong> says <em>how confidential</em> data is and can enforce protection. An <strong>endorsement</strong> says <em>how trustworthy/authoritative</em> it is and enforces nothing. Also: <strong>promotion is self-service, certification is gated</strong> — that distinction is a frequent question.</p>
+      </div>
+
+      <h3 id="audit">Fabric audit logs</h3>
+      <ul>
+        <li>Fabric activity flows into the <strong>Microsoft 365 unified audit log</strong>, searchable in <strong>Microsoft Purview → Audit</strong>.</li>
+        <li>Fabric admins can also use the <strong>admin portal audit/activity view</strong> and the <strong>Get Activity Events</strong> admin API or <strong>Office 365 Management Activity API</strong> for programmatic export.</li>
+        <li>Captured events include item create/read/update/delete, sharing and permission changes, exports and downloads, and data access.</li>
+        <li>Retention follows the Microsoft 365 licence — <strong>180 days</strong> under Audit (Standard) with longer retention available under Audit (Premium)/E5 add-ons. Verify current retention against Purview docs.</li>
+      </ul>
+      <div class="callout note">
+        <p class="ct-title">Which log answers which question?</p>
+        <p>"<em>Who accessed or shared this item?</em>" → <strong>audit log</strong> (Purview). "<em>Why is the capacity throttling and which item burned the CUs?</em>" → <strong>Capacity Metrics app</strong>. "<em>Why did last night's run fail?</em>" → <strong>monitoring hub</strong>. Don't reach for the audit log to troubleshoot performance.</p>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="orchestration"><span class="num">1.4</span> Orchestrate processes</h2>
+
+      <h3 id="tool-choice">Dataflow Gen2 vs pipeline vs notebook</h3>
+      <div class="table-wrap">
+        <table class="tbl t-purple">
+          <thead><tr><th>Dimension</th><th>Dataflow Gen2</th><th>Notebook</th><th>Data pipeline</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Role</strong></td><td>Transformation</td><td>Transformation</td><td><strong>Orchestration</strong></td></tr>
+            <tr><td><strong>Persona</strong></td><td>Analyst / citizen developer</td><td>Data engineer / scientist</td><td>Data engineer</td></tr>
+            <tr><td><strong>Language</strong></td><td>M (Power Query), visual</td><td>PySpark, Spark SQL, Scala, R</td><td>Visual designer + expression language</td></tr>
+            <tr><td><strong>Scales to</strong></td><td>Small–medium volumes</td><td>Very large volumes (Spark)</td><td>Depends on the activities it calls</td></tr>
+            <tr><td><strong>Connectivity</strong></td><td>150+ Power Query connectors</td><td>Whatever Spark can read</td><td>Copy activity connector library</td></tr>
+            <tr><td><strong>Can call others?</strong></td><td>No</td><td>Yes (other notebooks)</td><td><strong>Yes — notebooks, dataflows, stored procs</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout exam">
+        <p class="ct-title">Caveat — the framing that decides it</p>
+        <p>If the stem describes <strong>one transformation</strong>, choose Dataflow Gen2 (no-code/analyst) or a notebook (code/scale). If it describes <strong>several steps that must run in order, with conditions, retries or looping</strong>, the answer is a <strong>data pipeline</strong> — which then <em>calls</em> the dataflow or notebook. Pipelines orchestrate; they are not themselves a transformation engine.</p>
+      </div>
+
+      <h3 id="triggers">Schedules and event-based triggers</h3>
+      <div class="table-wrap">
+        <table class="tbl t-purple">
+          <thead><tr><th>Trigger</th><th>Fires on</th><th>Typical use</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Schedule</strong></td><td>A recurrence (by the minute, hour, day, week) with a start/end and time zone</td><td>Nightly or hourly batch loads</td></tr>
+            <tr><td><strong>Event-based (OneLake events)</strong></td><td>File/folder created, deleted or renamed in OneLake</td><td>Process files as soon as they land</td></tr>
+            <tr><td><strong>Event-based (Azure Blob / external)</strong></td><td>Blob storage events surfaced through the <strong>Real-Time hub</strong></td><td>React to arrivals in ADLS/Blob</td></tr>
+            <tr><td><strong>Job events</strong></td><td>A Fabric job succeeds, fails or completes</td><td>Chain workloads across items; alert on failure</td></tr>
+            <tr><td><strong>Manual / API</strong></td><td>Run now, REST API, or an upstream pipeline</td><td>Ad-hoc runs and testing</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout note">
+        <p class="ct-title">How event triggers are wired</p>
+        <p>Fabric event triggers are built on the <strong>Real-Time hub</strong> and <strong>Activator</strong>: the event source publishes into the hub, and an Activator rule starts the pipeline. That is why "run the pipeline when a file lands in OneLake" is an <em>event</em> trigger and not a tight polling schedule.</p>
+      </div>
+
+      <h3 id="patterns">Orchestration patterns, parameters and dynamic expressions</h3>
+
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+flowchart TD
+  SCH["Schedule or event trigger"] --> LOOKUP["Lookup<br/>read watermark / file list"]
+  LOOKUP --> FE["ForEach<br/>iterate, optionally in parallel"]
+  FE --> COPY["Copy data<br/>source to bronze"]
+  COPY --> IF{"If condition<br/>rows copied greater than 0"}
+  IF -->|yes| NB1["Notebook<br/>bronze to silver"]
+  IF -->|no| SKIP["Skip / log"]
+  NB1 --> NB2["Notebook<br/>silver to gold"]
+  NB2 --> SP["Stored procedure<br/>update watermark"]
+  SP --> REF["Semantic model refresh"]
+        </div>
+        <div class="mm-cap">The canonical medallion pipeline: look up state, iterate, copy, branch, transform, record the new watermark, refresh downstream.</div>
+      </div>
+
+      <h4>Control-flow activities worth knowing</h4>
+      <div class="table-wrap">
+        <table class="tbl t-purple">
+          <thead><tr><th>Activity</th><th>Use</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Lookup</strong></td><td>Read a single value or row set (a watermark, a config table) to drive later activities</td></tr>
+            <tr><td><strong>ForEach</strong></td><td>Iterate a collection; <code>isSequential</code> off runs items in parallel up to a batch count</td></tr>
+            <tr><td><strong>If condition / Switch</strong></td><td>Branch on an expression</td></tr>
+            <tr><td><strong>Until</strong></td><td>Loop until a condition is true — polling patterns</td></tr>
+            <tr><td><strong>Set / Append variable</strong></td><td>Accumulate state within a run</td></tr>
+            <tr><td><strong>Invoke pipeline</strong></td><td>Call a child pipeline — the modular orchestration pattern</td></tr>
+            <tr><td><strong>Web / Webhook</strong></td><td>Call REST endpoints; Webhook waits for a callback</td></tr>
+            <tr><td><strong>Fail</strong></td><td>Deliberately fail a run with a custom message</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>Dynamic expressions</h4>
+      <p>Pipeline expressions start with <code>@</code>. Know how to read these:</p>
+      <div class="code-block"><span class="lang">Pipeline expressions</span><pre class="code"><code><span class="cm">// Pipeline parameter and variable</span>
+@pipeline().parameters.InputFolder
+@variables(<span class="st">'RowCount'</span>)
+
+<span class="cm">// System variables</span>
+@pipeline().RunId
+@pipeline().TriggerTime
+
+<span class="cm">// Output of a previous activity</span>
+@activity(<span class="st">'LookupWatermark'</span>).output.firstRow.LastLoadedDate
+@activity(<span class="st">'CopyToBronze'</span>).output.rowsCopied
+
+<span class="cm">// String building and dates</span>
+@concat(pipeline().parameters.Prefix, <span class="st">'_'</span>,
+        formatDateTime(utcnow(), <span class="st">'yyyyMMdd'</span>), <span class="st">'.parquet'</span>)
+@formatDateTime(addDays(utcnow(), -1), <span class="st">'yyyy-MM-dd'</span>)
+
+<span class="cm">// Condition for an If activity</span>
+@greater(int(activity(<span class="st">'CopyToBronze'</span>).output.rowsCopied), 0)
+
+<span class="cm">// Current item inside a ForEach</span>
+@item().TableName</code></pre></div>
+
+      <h4>Notebook orchestration</h4>
+      <div class="code-block"><span class="lang">PySpark</span><pre class="code"><code><span class="cm"># Run another notebook and capture its exit value (timeout in seconds)</span>
+result = notebookutils.notebook.run(<span class="st">"transform_silver"</span>, 300,
+                                    {<span class="st">"load_date"</span>: <span class="st">"2026-07-21"</span>})
+
+<span class="cm"># Run many notebooks with a dependency graph, in parallel where possible</span>
+notebookutils.notebook.runMultiple(dag)
+
+<span class="cm"># Return a value to the caller (pipeline or parent notebook)</span>
+notebookutils.notebook.exit(<span class="st">"rows_loaded=18432"</span>)</code></pre></div>
+      <div class="callout tip">
+        <p class="ct-title">Parameter cells and notebookutils</p>
+        <p>A notebook receives parameters through a cell <strong>tagged as the parameter cell</strong> — values passed by the pipeline's Notebook activity override the defaults in that cell. Note also that <code>mssparkutils</code> has been superseded by <strong><code>notebookutils</code></strong> in Fabric; you may still see the old name in older material and in exam distractors.</p>
+      </div>
+      <div class="callout exam">
+        <p class="ct-title">Caveat — %run vs notebookutils.notebook.run</p>
+        <p><code>%run</code> inlines another notebook into the <strong>same Spark session</strong>, sharing variables — good for shared helper functions. <code>notebookutils.notebook.run()</code> executes it as a <strong>separate job</strong> with its own session, passes parameters and returns an exit value — that is the orchestration primitive. For parallel execution with dependencies, <code>runMultiple()</code> with a DAG beats a chain of sequential calls.</p>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="scenarios">Scenario quick reference</h2>
+      <div class="table-wrap">
+        <table class="tbl">
+          <thead><tr><th>Scenario</th><th>Deciding constraint</th><th>Answer</th></tr></thead>
+          <tbody>
+            <tr><td>Promote items Dev → Test → Prod</td><td>Environment promotion</td><td><strong>Deployment pipeline</strong></td></tr>
+            <tr><td>Promoted pipeline still points at the Dev database</td><td>Per-stage binding</td><td><strong>Deployment rule on the target stage</strong></td></tr>
+            <tr><td>Review notebook changes in a pull request</td><td>Code review</td><td><strong>Git integration</strong></td></tr>
+            <tr><td>Warehouse schema under source control with drift detection</td><td>Schema as code</td><td><strong>Database project</strong></td></tr>
+            <tr><td>Engineers build but must not share data outward</td><td>No resharing</td><td><strong>Contributor role</strong></td></tr>
+            <tr><td>Each sales rep sees only their own region</td><td>Row filtering, SQL consumers</td><td><strong>RLS security policy</strong></td></tr>
+            <tr><td>Row filtering that also holds for Spark readers</td><td>Cross-engine</td><td><strong>OneLake security</strong></td></tr>
+            <tr><td>Hide the Salary column from analysts</td><td>Column restriction</td><td><strong>CLS — GRANT/DENY on columns</strong></td></tr>
+            <tr><td>Table must not even appear in the field list</td><td>Invisibility</td><td><strong>OLS in the semantic model</strong></td></tr>
+            <tr><td>Show only the last 4 digits of a card number</td><td>Presentation masking</td><td><strong>DDM <code>partial()</code></strong></td></tr>
+            <tr><td>Restrict access to one folder of a Lakehouse</td><td>Folder granularity</td><td><strong>OneLake data access role</strong></td></tr>
+            <tr><td>Mark a semantic model as the authoritative source</td><td>Trust signal</td><td><strong>Certified endorsement</strong> (allow-listed users only)</td></tr>
+            <tr><td>Prove who exported a report last month</td><td>Forensics</td><td><strong>Purview audit log</strong></td></tr>
+            <tr><td>Run a job the moment a file lands in OneLake</td><td>Event-driven</td><td><strong>Event-based trigger via Real-Time hub</strong></td></tr>
+            <tr><td>Migrate existing Airflow DAGs into Fabric</td><td>Airflow ecosystem</td><td><strong>Apache Airflow job</strong></td></tr>
+            <tr><td>Notebook takes minutes to start every morning</td><td>Cold start</td><td><strong>Starter pool</strong> (instead of custom pool)</td></tr>
+            <tr><td>Same libraries needed across many notebooks</td><td>Dependency reuse</td><td><strong>Environment</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="pager">
+        <a class="prev" href="../fabric-foundations/"><div class="pg-dir">← Previous</div><div class="pg-title">Fabric foundations</div></a>
+        <a class="next" href="../domain-2-ingest-transform/"><div class="pg-dir">Next →</div><div class="pg-title">Domain 2 · Ingest &amp; transform</div></a>
+      </div>
+
+    </main>
+  </div>
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>
