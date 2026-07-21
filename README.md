@@ -1,51 +1,47 @@
 # 📘 DP-700 Study Notes v2 — Fabric Data Engineer Associate
 
-Exam-focused study notes for **Microsoft DP-700: Implementing Data Engineering Solutions Using Microsoft Fabric**, rebuilt as a static HTML / CSS / JavaScript site.
+Free, exam-focused study notes for **Microsoft DP-700: Implementing Data Engineering Solutions Using Microsoft Fabric**.
 
-[![Deploy to GitHub Pages](https://github.com/marcogrimaldi29/dp-700-study-notes-v2/actions/workflows/deploy-pages.yml/badge.svg)](https://github.com/marcogrimaldi29/dp-700-study-notes-v2/actions/workflows/deploy-pages.yml)
 [![marcogrimaldi29.com](https://img.shields.io/badge/Blog-marcogrimaldi29.com-blue?logo=rss)](https://marcogrimaldi29.com)
 
+> - 🌐 **Read the notes:** **[marcogrimaldi29.com/dp-700-study-notes-v2](https://marcogrimaldi29.com/dp-700-study-notes-v2/)**
+> - 📅 **Aligned to:** Skills Measured effective **21 July 2026**
 > - 🎯 **Goal:** Earn the Microsoft Certified: Fabric Data Engineer Associate badge
-> - 📅 **Aligned to:** Skills Measured effective **July 21, 2026**
-> - 🌐 **Published site:** [DP-700 Study Notes v2](https://marcogrimaldi29.com/dp-700-study-notes-v2/)
 > - ✍️ **Author:** [Marco Grimaldi](https://www.linkedin.com/in/marco-grimaldi29/)
 
----
-
-## What's new in v2
-
-This is a ground-up rebuild of the original [DP-700 Study Notes](https://marcogrimaldi29.com/dp-700-study-notes/):
-
-| Change | Detail |
-|--------|--------|
-| **Jekyll removed** | Plain HTML + CSS + vanilla JS. No Ruby, no Gemfile, no build step — GitHub Pages serves the files directly (`.nojekyll`). |
-| **Shared design system** | Same structure and component library as the [MS-102 study notes](https://marcogrimaldi29.com/ms-102-study-notes/): sticky nav, sidebar TOC with scrollspy, light/dark theme, Mermaid diagrams, callouts, decision tables. |
-| **Refreshed to July 21, 2026** | Rewritten against the current official skills measured, including **Apache Airflow workspace settings**, newly listed under *Configure Microsoft Fabric workspace settings*. |
-| **Corrections** | Notably the Spark vCore table — **1 CU = 2 Spark vCores** with a **3× burst factor** (F64 = 128 base / 384 burst). The v1 notes had this wrong. |
-| **New depth** | Capacity smoothing and the throttling ladder, `ReadAll` vs SQL-layer security, OneLake security, query folding, SCD Type 2 two-pass MERGE, Direct Lake fallback, consumer groups, deletion vectors, `queryinsights` views, Activator and workspace monitoring. |
+These notes are a **companion to the official documentation**, not a replacement for it. They are written to be read in order, and they assume you will pair each section with hands-on practice in a Microsoft Fabric trial capacity.
 
 ---
 
-## Structure
+## What's inside
 
-```
-dp-700-study-notes-v2/
-├── index.html                        ← Home: weights, domain cards, exam overview
-├── fabric-foundations/               ← Prerequisite: OneLake, capacity, engines, Delta
-├── domain-1-implement-manage/        ← Domain 1 (30–35%)
-├── domain-2-ingest-transform/        ← Domain 2 (30–35%)
-├── domain-3-monitor-optimize/        ← Domain 3 (30–35%)
-├── exam-tips/                        ← Final review: numbers, traps, checklist
-├── assets/
-│   ├── css/style.css                 ← Design system (Fabric palette, light/dark)
-│   ├── js/main.js                    ← Header/footer injection, TOC, theme, Mermaid
-│   └── images/
-├── .github/workflows/deploy-pages.yml
-├── .nojekyll
-└── sitemap.xml
-```
+| Section | Covers |
+|---------|--------|
+| [Fabric foundations](https://marcogrimaldi29.com/dp-700-study-notes-v2/fabric-foundations/) | OneLake, workspaces and domains, capacities and CUs, Lakehouse vs Warehouse vs Eventhouse, Delta Lake internals, shortcuts |
+| [Domain 1 · Implement &amp; manage](https://marcogrimaldi29.com/dp-700-study-notes-v2/domain-1-implement-manage/) | Spark, domain, OneLake and Apache Airflow workspace settings; Git, database projects, deployment pipelines; the full security stack; orchestration |
+| [Domain 2 · Ingest &amp; transform](https://marcogrimaldi29.com/dp-700-study-notes-v2/domain-2-ingest-transform/) | Full and incremental loads, dimensional modelling and SCDs, shortcuts and mirroring, pipelines, PySpark/T-SQL/KQL, Eventstreams, windowing |
+| [Domain 3 · Monitor &amp; optimize](https://marcogrimaldi29.com/dp-700-study-notes-v2/domain-3-monitor-optimize/) | Monitoring hub and Activator alerts, error triage across seven item types, optimization for Lakehouse, pipelines, Warehouse, Eventhouse, Spark and queries |
+| [Exam tips &amp; caveats](https://marcogrimaldi29.com/dp-700-study-notes-v2/exam-tips/) | Key numbers, master decision trees, the highest-yield traps, scenario→answer lookup, pre-exam checklist |
 
-Each page is standalone HTML. The shared header, footer, sidebar TOC and floating buttons are injected at runtime by `assets/js/main.js`, so adding a page means writing the content and adding one entry to the `PAGES` array.
+Throughout, 🎯 **caveat** callouts flag the details that most often decide a question, and every section ends with a scenario→answer table for rapid review.
+
+---
+
+## v1 and v2
+
+The original [DP-700 Study Notes](https://marcogrimaldi29.com/dp-700-study-notes/) remain online. **v2 is the version to study from** — it is a ground-up rewrite against the current exam objectives.
+
+| | v1 | v2 |
+|---|---|---|
+| Aligned to | Earlier skills measured | **Skills measured effective 21 July 2026** |
+| Format | Markdown site (Jekyll) | Static HTML/CSS/JS — light &amp; dark theme, sidebar navigation, rendered diagrams |
+| Coverage | 3 domains + prerequisites + cheatsheet | 3 domains + foundations + expanded exam-tips review |
+
+What changed in the content:
+
+- **Apache Airflow workspace settings** — now an explicit objective under *Configure Microsoft Fabric workspace settings*, and covered accordingly.
+- **Corrected capacity figures** — the Spark vCore mapping is **1 CU = 2 Spark vCores** with a **3× burst factor** (so F64 = 128 base, 384 burst).
+- **Added depth** where the exam probes hardest — capacity smoothing and the throttling ladder, why `ReadAll` bypasses SQL-layer security, OneLake security, Dataflow Gen2 query folding, the two-pass SCD Type 2 MERGE, Direct Lake fallback, streaming consumer groups, deletion vectors, the `queryinsights` views, Activator and workspace monitoring.
 
 ---
 
@@ -54,7 +50,7 @@ Each page is standalone HTML. The shared header, footer, sidebar TOC and floatin
 | Detail | Info |
 |--------|------|
 | 🏅 Certification | Microsoft Certified: Fabric Data Engineer Associate |
-| 📝 Passing score | **700 / 1000** (scaled) |
+| 📝 Passing score | **700 / 1000** (scaled — not 70% of questions) |
 | ⏱️ Duration | **100 minutes** |
 | ❓ Question types | MCQ, multi-select, drag-and-drop, build list, hotspot, case studies |
 | 🔁 Renewal | Annual, via free online assessment on Microsoft Learn |
@@ -68,25 +64,7 @@ Each page is standalone HTML. The shared header, footer, sidebar TOC and floatin
 | 2 | Ingest and transform data | **30–35%** |
 | 3 | Monitor and optimize an analytics solution | **30–35%** |
 
-All three are equally weighted — balanced study across all areas is essential.
-
----
-
-## Local development
-
-No build step. Serve the folder with any static server:
-
-```bash
-npx -y serve -l 4318 .
-```
-
-Then open <http://localhost:4318>. A `.claude/launch.json` config is included for the same command.
-
----
-
-## Deployment
-
-`.github/workflows/deploy-pages.yml` publishes to GitHub Pages on push to `main` and injects the Umami analytics website ID from the `UMAMI_WEBSITE_ID` repository secret at build time, so the ID is never committed.
+All three are equally weighted — there is no domain safe to skip.
 
 ---
 
@@ -95,7 +73,7 @@ Then open <http://localhost:4318>. A `.claude/launch.json` config is included fo
 | Resource | Link |
 |----------|------|
 | 📋 Skills measured / study guide | [Official DP-700 study guide](https://learn.microsoft.com/en-us/credentials/certifications/resources/study-guides/dp-700) |
-| 📄 Exam page | [DP-700](https://learn.microsoft.com/en-us/credentials/certifications/exams/dp-700/) |
+| 📄 Exam page &amp; practice assessment | [DP-700](https://learn.microsoft.com/en-us/credentials/certifications/exams/dp-700/) |
 | 📚 Fabric documentation | [Microsoft Fabric](https://learn.microsoft.com/en-us/fabric/) |
 | 🔧 Data engineering in Fabric | [Overview](https://learn.microsoft.com/en-us/fabric/data-engineering/data-engineering-overview) |
 | 🎓 Instructor-led course | [DP-700T00-A](https://learn.microsoft.com/en-us/training/courses/dp-700t00) |
@@ -105,16 +83,16 @@ Then open <http://localhost:4318>. A `.claude/launch.json` config is included fo
 
 ## Contributing
 
-Corrections and pull requests are welcome — Fabric moves fast and some details will age. If you spot something out of date, please open an issue or PR.
+Corrections and pull requests are very welcome. Microsoft Fabric ships changes almost weekly, and features regularly move between preview and general availability — some details here **will** age. If you spot something out of date or wrong, please open an issue or a PR.
 
-⭐ If these notes helped you, consider starring the repo.
+⭐ If these notes helped you, consider starring the repo — it helps others find them.
 
 ---
 
-## Credits
+## Credits &amp; disclaimer
 
-Maintained by **[Marco Grimaldi](https://www.linkedin.com/in/marco-grimaldi29/)** — Cloud Solution Architect.
+Maintained by **[Marco Grimaldi](https://www.linkedin.com/in/marco-grimaldi29/)** — Cloud Solution Architect. More certification guides and tech writing at **[marcogrimaldi29.com](https://marcogrimaldi29.com)**.
 
-Created with AI assistance and reviewed by the author for accuracy and clarity. May still contain errors — always verify against the latest [Microsoft documentation](https://learn.microsoft.com/en-us/fabric/).
+Created with AI assistance and reviewed by the author for accuracy and clarity. These notes contain **no exam content** and are an independent study aid for learning purposes only. They may still contain errors — always verify against the latest [Microsoft documentation](https://learn.microsoft.com/en-us/fabric/) and the current [DP-700 study guide](https://learn.microsoft.com/en-us/credentials/certifications/resources/study-guides/dp-700).
 
-> *Not affiliated with or endorsed by Microsoft. For study and learning purposes only.*
+> *Not affiliated with or endorsed by Microsoft.*
