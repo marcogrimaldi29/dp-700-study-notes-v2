@@ -404,8 +404,11 @@ ol.steps > li::before { counter-increment: step; content: counter(step); positio
 @media (max-width: 760px) {
   .hero { padding: 36px 24px; }
   .hero h1 { font-size: 1.9rem; }
-  .brand .brand-full { display: none; }
   .ghub-link span { display: none; }
+  .code-block .lang { position: static; display: block; border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    background: #151926; border: 1px solid #2a3142; border-bottom: none; padding: 6px 12px;
+    margin: 0; text-align: right; }
+  .code-block > pre.code { border-top-left-radius: 0; border-top-right-radius: 0; }
 }
 
 @media print {
