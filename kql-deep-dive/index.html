@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KQL Deep Dive — DP-700</title>
+  <meta name="description" content="DP-700 KQL deep dive: the Kusto Query Language pipe model in Fabric Real-Time Intelligence, filtering and projecting, summarize and aggregation, joins and unions, time-series analysis with make-series, stored functions, update policies, materialized views, data retention and caching policies, and query performance best practices — grounded in the official Kusto and Fabric documentation.">
+  <meta name="author" content="Marco Grimaldi">
+  <link rel="canonical" href="https://marcogrimaldi29.com/dp-700-study-notes-v2/kql-deep-dive/">
+  <meta name="robots" content="index, follow">
+  <meta name="theme-color" content="#0e8ba8">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="DP-700 Study Notes v2">
+  <meta property="og:title" content="DP-700 · KQL deep dive">
+  <meta property="og:description" content="The Kusto Query Language for Fabric Real-Time Intelligence: operators, summarize, joins, time series, update policies and materialized views for the DP-700 exam.">
+  <meta property="og:url" content="https://marcogrimaldi29.com/dp-700-study-notes-v2/kql-deep-dive/">
+  <meta property="og:image" content="https://marcogrimaldi29.com/dp-700-study-notes-v2/assets/images/site-mark-no-bg.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="DP-700 · KQL deep dive">
+  <meta name="twitter:description" content="A query-first KQL reference for Microsoft Fabric Real-Time Intelligence and the DP-700 exam.">
+  <meta name="twitter:image" content="https://marcogrimaldi29.com/dp-700-study-notes-v2/assets/images/site-mark-no-bg.png">
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@graph":[{"@type":"TechArticle","headline":"DP-700 · KQL deep dive","description":"The Kusto Query Language for Fabric Real-Time Intelligence: operators, summarize, joins, time series, update policies and materialized views for the DP-700 exam.","inLanguage":"en","url":"https://marcogrimaldi29.com/dp-700-study-notes-v2/kql-deep-dive/","author":{"@type":"Person","name":"Marco Grimaldi","url":"https://marcogrimaldi29.com/"},"isPartOf":"https://marcogrimaldi29.com/dp-700-study-notes-v2/"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"DP-700 Study Notes v2","item":"https://marcogrimaldi29.com/dp-700-study-notes-v2/"},{"@type":"ListItem","position":2,"name":"KQL deep dive","item":"https://marcogrimaldi29.com/dp-700-study-notes-v2/kql-deep-dive/"}]}]}
+  </script>
+  <link rel="icon" href="../assets/images/site-mark-no-bg.png">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body data-page="kql">
+  <div class="layout" style="--accent:var(--d5)">
+
+    <aside class="toc"><h4>On this page</h4><nav id="toc-list"></nav></aside>
+
+    <main class="content">
+      <div class="page-head">
+        <div class="kicker">Deep dive · Engine skill</div>
+        <h1>KQL deep dive</h1>
+        <p>The read-only query language of Real-Time Intelligence. This page is the query-first companion to Domain 2: the Kusto pipe model, filtering and aggregation, joins, time-series analysis, and the KQL database objects — functions, update policies and materialized views — that the exam tests.</p>
+      </div>
+
+      <div class="callout note">
+        <p class="ct-title">How this page fits the exam</p>
+        <p>KQL shows up wherever the stem says <em>Eventhouse</em>, <em>KQL database</em>, <em>telemetry / logs</em>, <em>time-series</em> or <em>real-time</em>. As with PySpark, you mostly have to <strong>read a query and know what it returns</strong> — or pick the operator/object that fits a requirement. Everything here is grounded in the official <a href="https://learn.microsoft.com/kusto/query/" target="_blank" rel="noopener">Kusto Query Language</a> and <a href="https://learn.microsoft.com/fabric/real-time-intelligence/" target="_blank" rel="noopener">Fabric Real-Time Intelligence</a> documentation. Pair it with <a href="../domain-2-ingest-transform/#streaming">Domain 2</a> (streaming) and <a href="../domain-3-monitor-optimize/#eventhouse">Domain 3</a> (Eventhouse optimization).</p>
+      </div>
+
+      <div class="card">
+        <strong>On this page:</strong>
+        <ul style="margin-bottom:0">
+          <li><a href="#model">The KQL data model &amp; pipe structure</a> — tables, tabular vs scalar operators, order</li>
+          <li><a href="#filter-project">Filtering &amp; shaping</a> — where, project, extend, distinct, sort, top</li>
+          <li><a href="#summarize">Aggregation with summarize</a> — by, bin, arg_max, make_list</li>
+          <li><a href="#joins">Joins &amp; unions</a> — join kinds, union, lookup, mv-expand</li>
+          <li><a href="#timeseries">Time-series analysis</a> — make-series, ago, bin, render</li>
+          <li><a href="#objects">Functions, update policies &amp; materialized views</a></li>
+          <li><a href="#policies">Data policies</a> — retention, caching, one logical copy</li>
+          <li><a href="#performance">Query performance best practices</a></li>
+          <li><a href="#scenarios">Scenario quick reference</a></li>
+        </ul>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="model">The KQL data model &amp; pipe structure</h2>
+      <p>KQL is the query language of an <strong>Eventhouse</strong> and its <strong>KQL databases</strong>. It is <strong>read-only</strong>: you query and shape data, but ingestion and table management use separate management (control) commands, which start with a dot (<code>.create</code>, <code>.ingest</code>). A query starts from a table and flows through a <strong>pipeline</strong> of operators separated by the pipe character <code>|</code>; each step transforms the table and passes it on.</p>
+
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+flowchart LR
+  T["Table<br/>SensorReadings"] --> F["where<br/>filter rows"]
+  F --> A["summarize<br/>aggregate"]
+  A --> S["sort / top<br/>order"]
+  S --> P["project<br/>select columns"]
+        </div>
+        <div class="mm-cap">Get data → filter → summarize → sort → select. The order of steps changes both the result and the performance.</div>
+      </div>
+
+      <div class="code-block"><span class="lang">KQL · the shape of every query</span><pre class="code"><code>SensorReadings                              <span class="cm">// 1. table (data source)</span>
+| <span class="kw">where</span> Timestamp &gt; ago(1h)               <span class="cm">// 2. filter early</span>
+| <span class="kw">where</span> DeviceId == <span class="st">"sensor-42"</span>
+| <span class="kw">summarize</span> AvgTemp = avg(Temperature) <span class="kw">by</span> bin(Timestamp, 5m)   <span class="cm">// 3. aggregate</span>
+| <span class="kw">sort by</span> Timestamp <span class="kw">desc</span>                  <span class="cm">// 4. order</span>
+| <span class="kw">project</span> Timestamp, AvgTemp             <span class="cm">// 5. select columns</span></code></pre></div>
+
+      <div class="table-wrap">
+        <table class="tbl t-slate">
+          <thead><tr><th>Concept</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Tabular operator</strong></td><td>Takes a table in, returns a table out: <code>where</code>, <code>summarize</code>, <code>project</code>, <code>join</code>, <code>sort</code>, <code>top</code></td></tr>
+            <tr><td><strong>Scalar function</strong></td><td>Operates on a single value: <code>ago()</code>, <code>bin()</code>, <code>tostring()</code>, <code>strcat()</code></td></tr>
+            <tr><td><strong>Aggregation function</strong></td><td>Only valid inside <code>summarize</code> / <code>make-series</code>: <code>count()</code>, <code>avg()</code>, <code>dcount()</code>, <code>arg_max()</code></td></tr>
+            <tr><td><strong>Management command</strong></td><td>Starts with <code>.</code> — creates tables, ingests data, sets policies; not part of a query</td></tr>
+            <tr><td><strong><code>let</code></strong></td><td>Names a value, expression, or subquery for reuse within a query</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout tip">
+        <p class="ct-title">Coming from SQL</p>
+        <p>KQL reads top-to-bottom in execution order, the reverse of SQL's <code>SELECT … FROM … WHERE</code>. <code>SELECT</code> → <code>project</code>, <code>WHERE</code> → <code>where</code>, <code>GROUP BY</code> → <code>summarize … by</code>, <code>HAVING</code> → a <code>where</code> after the <code>summarize</code>, <code>ORDER BY</code> → <code>sort by</code>, <code>TOP</code> → <code>top</code>. The official <a href="https://learn.microsoft.com/kusto/query/sql-cheat-sheet?view=microsoft-fabric" target="_blank" rel="noopener">SQL-to-KQL cheat sheet</a> maps the rest.</p>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="filter-project">Filtering &amp; shaping</h2>
+      <div class="table-wrap">
+        <table class="tbl t-slate">
+          <thead><tr><th>Operator</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>where</code></td><td>Keep rows matching a predicate — the single most important operator</td></tr>
+            <tr><td><code>project</code></td><td>Choose columns, in order, and compute new ones</td></tr>
+            <tr><td><code>project-away</code> / <code>project-keep</code></td><td>Drop / keep columns by name or pattern</td></tr>
+            <tr><td><code>project-rename</code></td><td>Rename columns</td></tr>
+            <tr><td><code>extend</code></td><td>Add a calculated column, keeping the existing ones</td></tr>
+            <tr><td><code>distinct</code></td><td>Distinct combinations of the given columns</td></tr>
+            <tr><td><code>take</code> / <code>limit</code></td><td>Return up to N rows (arbitrary) — great while developing</td></tr>
+            <tr><td><code>sort by</code> / <code>order by</code></td><td>Order rows (default descending)</td></tr>
+            <tr><td><code>top N by</code></td><td><code>sort</code> + <code>take</code> in one — use it instead of both</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="code-block"><span class="lang">KQL · filter, extend, project, top</span><pre class="code"><code>Sales
+| <span class="kw">where</span> Timestamp &gt; ago(30d) <span class="kw">and</span> Amount &gt; 0     <span class="cm">// datetime filter first</span>
+| <span class="kw">extend</span> Margin = Amount - Cost                  <span class="cm">// add a computed column</span>
+| <span class="kw">where</span> Region <span class="kw">has</span> <span class="st">"north"</span>                        <span class="cm">// 'has' matches whole terms, fast</span>
+| <span class="kw">top</span> 10 <span class="kw">by</span> Margin <span class="kw">desc</span>                         <span class="cm">// sort + take in one operator</span>
+| <span class="kw">project</span> Timestamp, Region, Amount, Margin</code></pre></div>
+
+      <div class="callout exam">
+        <p class="ct-title">Caveat — <code>has</code> beats <code>contains</code>, and <code>=~</code> beats <code>tolower()</code></p>
+        <p><code>has</code> matches whole indexed <em>terms</em> and uses the index, so it is far faster than <code>contains</code>, which scans for a substring anywhere. For case-insensitive equality use <code>Col =~ "value"</code>, never <code>tolower(Col) == "value"</code> — wrapping the column in a function defeats the index. Filtering on a raw column beats filtering on a calculated one.</p>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="summarize">Aggregation with summarize</h2>
+      <p><code>summarize</code> collapses the table into groups defined by the <code>by</code> clause and computes aggregates for each. It is the workhorse of KQL analytics.</p>
+
+      <div class="code-block"><span class="lang">KQL · summarize by a time bin and a dimension</span><pre class="code"><code>SensorReadings
+| <span class="kw">where</span> Timestamp &gt; ago(7d)
+| <span class="kw">summarize</span> AvgTemp  = avg(Temperature),
+            MaxTemp  = max(Temperature),
+            Readings = count(),
+            Devices  = dcount(DeviceId)          <span class="cm">// distinct count</span>
+    <span class="kw">by</span> bin(Timestamp, 1h), Building
+| <span class="kw">sort by</span> Timestamp <span class="kw">asc</span></code></pre></div>
+
+      <div class="table-wrap">
+        <table class="tbl t-slate">
+          <thead><tr><th>Aggregation</th><th>Returns</th></tr></thead>
+          <tbody>
+            <tr><td><code>count()</code> / <code>countif(pred)</code></td><td>Row count / conditional count</td></tr>
+            <tr><td><code>dcount(col)</code></td><td>Approximate distinct count (fast at scale)</td></tr>
+            <tr><td><code>sum</code>, <code>avg</code>, <code>min</code>, <code>max</code></td><td>Standard numeric aggregates</td></tr>
+            <tr><td><code>percentile(col, 95)</code></td><td>Percentiles / distributions</td></tr>
+            <tr><td><code>arg_max(x, *)</code> / <code>arg_min(x, *)</code></td><td>The <em>whole row</em> where x is largest / smallest — the "latest record per key" idiom</td></tr>
+            <tr><td><code>make_list(col)</code> / <code>make_set(col)</code></td><td>Collect values into an array / distinct-value array</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="code-block"><span class="lang">KQL · latest reading per device with arg_max</span><pre class="code"><code>SensorReadings
+| <span class="kw">summarize</span> arg_max(Timestamp, *) <span class="kw">by</span> DeviceId   <span class="cm">// newest full row per device</span></code></pre></div>
+
+      <div class="callout exam">
+        <p class="ct-title">Caveat — <code>summarize</code> drops everything not aggregated or grouped</p>
+        <p>The output of <code>summarize</code> contains <strong>only</strong> the <code>by</code> columns and the computed aggregates. Referencing a column you neither grouped by nor aggregated fails later in the pipeline. To keep the full row while collapsing to one per key, use <code>arg_max(Timestamp, *)</code> — the <code>*</code> carries all columns. Also: grouping by a <code>dynamic</code> column needs an explicit cast such as <code>tostring(col)</code>.</p>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="joins">Joins &amp; unions</h2>
+      <p><code>join</code> merges rows from two tables on matching keys; <code>union</code> stacks their rows. <code>lookup</code> is a join optimised for enriching a fact table from a dimension.</p>
+
+      <div class="code-block"><span class="lang">KQL · join, lookup, union, mv-expand</span><pre class="code"><code><span class="cm">// Join — note the $left / $right column references</span>
+Readings
+| <span class="kw">join</span> kind=inner (Devices) <span class="kw">on</span> $left.DeviceId == $right.Id
+
+<span class="cm">// lookup — like a left join for dimension enrichment, fewer keystrokes</span>
+Readings
+| <span class="kw">lookup</span> kind=leftouter (Devices) <span class="kw">on</span> DeviceId
+
+<span class="cm">// union — stack rows from several tables</span>
+<span class="kw">union</span> withsource=SourceTable Readings_2025, Readings_2026
+| <span class="kw">where</span> Timestamp &gt; ago(1d)
+
+<span class="cm">// mv-expand — turn each element of a dynamic array into its own row</span>
+Events
+| <span class="kw">mv-expand</span> Tag = Tags</code></pre></div>
+
+      <div class="table-wrap">
+        <table class="tbl t-slate">
+          <thead><tr><th>Join kind</th><th>Keeps</th></tr></thead>
+          <tbody>
+            <tr><td><code>innerunique</code> (default)</td><td>Inner join after de-duplicating keys on the <strong>left</strong> — the surprising default</td></tr>
+            <tr><td><code>inner</code></td><td>All matching pairs from both sides</td></tr>
+            <tr><td><code>leftouter</code> / <code>rightouter</code> / <code>fullouter</code></td><td>All left / right / both rows, nulls where unmatched</td></tr>
+            <tr><td><code>leftsemi</code> / <code>rightsemi</code></td><td>Rows from one side that <em>have</em> a match (a filter)</td></tr>
+            <tr><td><code>leftanti</code> / <code>rightanti</code></td><td>Rows from one side with <em>no</em> match (an anti-filter)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout exam">
+        <p class="ct-title">Caveat — the default join is <code>innerunique</code>, not <code>inner</code></p>
+        <p>If you write <code>join</code> with no <code>kind</code>, KQL uses <strong><code>innerunique</code></strong>, which first removes duplicate keys from the left table — this can silently drop rows compared with a SQL inner join. When you need true inner-join semantics, say <code>kind=inner</code> explicitly. For performance, put the <strong>smaller table on the left</strong>, and prefer <code>where Col in (…)</code> over a <code>leftsemi</code> join when you are only filtering by a single column.</p>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="timeseries">Time-series analysis</h2>
+      <p>KQL is built for time-series. <code>bin()</code> inside <code>summarize</code> buckets rows into fixed intervals; <code>make-series</code> goes further, producing a <em>regular, gap-filled array</em> per partition that you can chart, smooth, and run anomaly detection on.</p>
+
+      <div class="code-block"><span class="lang">KQL · make-series with gap filling and a chart</span><pre class="code"><code><span class="kw">let</span> start = ago(1d);
+<span class="kw">let</span> stop  = now();
+SensorReadings
+| <span class="kw">make-series</span>
+      AvgTemp = avg(Temperature) default=0
+  <span class="kw">on</span> Timestamp <span class="kw">from</span> start <span class="kw">to</span> stop <span class="kw">step</span> 5m
+  <span class="kw">by</span> DeviceId                            <span class="cm">// one series per device</span>
+| <span class="kw">render</span> timechart</code></pre></div>
+
+      <div class="table-wrap">
+        <table class="tbl t-slate">
+          <thead><tr><th>Tool</th><th>Use</th></tr></thead>
+          <tbody>
+            <tr><td><code>ago(1h)</code>, <code>now()</code></td><td>Relative and current time — the basis of nearly every filter</td></tr>
+            <tr><td><code>bin(Timestamp, 5m)</code></td><td>Round each timestamp down to the window start (tumbling buckets)</td></tr>
+            <tr><td><code>summarize … by bin(...)</code></td><td>Aggregate into time buckets — omits empty buckets</td></tr>
+            <tr><td><code>make-series … step … default=</code></td><td>Regular time series with <strong>empty buckets filled</strong> — ready to chart/analyse</td></tr>
+            <tr><td><code>series_fir()</code>, <code>series_fit_line()</code></td><td>Moving averages, trend lines, anomaly detection over a series</td></tr>
+            <tr><td><code>render timechart</code></td><td>Plot the result (in querysets and dashboards)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout exam">
+        <p class="ct-title">Caveat — <code>summarize by bin()</code> vs <code>make-series</code></p>
+        <p>Both bucket by time, but <code>summarize by bin()</code> produces a <strong>row per non-empty bucket</strong> — missing intervals simply don't appear. <code>make-series</code> produces a <strong>continuous array</strong> across the whole range and fills gaps with <code>default</code> (or <code>series_fill_*</code>), which is what trend lines, moving averages and anomaly detection need. If a question wants a gap-free series or a chart, the answer is <code>make-series</code>.</p>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="objects">Functions, update policies &amp; materialized views</h2>
+      <p>Beyond ad-hoc queries, a KQL database holds reusable objects. Three matter for the exam because they map cleanly to the medallion architecture inside Real-Time Intelligence.</p>
+
+      <div class="code-block"><span class="lang">KQL · a stored function</span><pre class="code"><code>.create-or-alter <span class="kw">function</span> HotDevices(threshold: real) {
+    SensorReadings
+    | <span class="kw">where</span> Timestamp &gt; ago(1h)
+    | <span class="kw">summarize</span> AvgTemp = avg(Temperature) <span class="kw">by</span> DeviceId
+    | <span class="kw">where</span> AvgTemp &gt; threshold
+}</code></pre></div>
+
+      <div class="code-block"><span class="lang">KQL · an update policy (ingestion-time transform)</span><pre class="code"><code><span class="cm">// Bronze → Silver: runs automatically as data lands in RawEvents</span>
+.alter table SilverEvents policy update
+```[{
+    "IsEnabled": true,
+    "Source": "RawEvents",
+    "Query": "RawEvents | where isnotempty(DeviceId) | extend Temp = todouble(Value)",
+    "IsTransactional": true
+}]```</code></pre></div>
+
+      <div class="code-block"><span class="lang">KQL · a materialized view (always-fresh aggregate)</span><pre class="code"><code><span class="cm">// Latest bike count per station — deduplicated and pre-aggregated</span>
+.create-or-alter materialized-view <span class="kw">with</span> (folder=<span class="st">"Gold"</span>) LatestReading <span class="kw">on</span> table SensorReadings
+{
+    SensorReadings
+    | <span class="kw">summarize</span> arg_max(Timestamp, *) <span class="kw">by</span> DeviceId
+}</code></pre></div>
+
+      <div class="table-wrap">
+        <table class="tbl t-slate">
+          <thead><tr><th></th><th>Update policy</th><th>Materialized view</th></tr></thead>
+          <tbody>
+            <tr><td>When it runs</td><td><strong>At ingestion time</strong>, per batch, before data is queryable in the target</td><td><strong>In the background</strong>, after ingestion — source rows are queryable immediately</td></tr>
+            <tr><td>Good for</td><td>Row-level transforms, enrichment, filtering, splitting a stream (bronze→silver)</td><td><strong>Aggregations</strong> and deduplication (<code>arg_max</code>) kept always-fresh (gold)</td></tr>
+            <tr><td>Aggregations?</td><td>No — only within a single ingestion batch</td><td>Yes — this is its whole purpose (one <code>summarize</code>)</td></tr>
+            <tr><td>Query cost</td><td>Paid once at ingestion</td><td>Cheaper than aggregating the source table each query</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout exam">
+        <p class="ct-title">Caveat — pick the object by <em>when</em> the work must happen</p>
+        <p>If the requirement is "aggregate / deduplicate and keep it always up to date for fast reads", it's a <strong>materialized view</strong> (it always combines the materialized part with un-materialized deltas, so results are fresh). If it's "transform or enrich each record as it lands, before it's queryable", it's an <strong>update policy</strong>. A <code>summarize</code> that must stay current across all data can't be an update policy, because update policies only see one ingestion batch at a time.</p>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="policies">Data policies</h2>
+      <div class="table-wrap">
+        <table class="tbl t-slate">
+          <thead><tr><th>Policy</th><th>Controls</th><th>Exam angle</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Retention policy</strong></td><td>How long data is kept before automatic deletion (default 3,650 days, min 1 day)</td><td>"Drop telemetry after N days" → shorten retention</td></tr>
+            <tr><td><strong>Caching (hot) policy</strong></td><td>How much recent data is kept on fast local SSD (hot cache) vs cold storage</td><td>Speed vs cost: a wider hot cache = faster queries, more capacity used</td></tr>
+            <tr><td><strong>One logical copy</strong></td><td>Exposes the KQL database to OneLake via a shortcut so other Fabric engines read it</td><td>"Query Eventhouse data from a Lakehouse/notebook" without copying</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout tip">
+        <p class="ct-title">Retention and caching are independent</p>
+        <p>Retention decides <em>whether</em> data still exists; caching decides <em>how fast</em> the data that exists can be queried. You can retain two years of data but keep only the last 30 days in hot cache — recent queries stay fast while older data is still available, just slower and cheaper to store.</p>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="performance">Query performance best practices</h2>
+      <p>KQL cost and speed are driven almost entirely by <strong>how much data each step has to scan</strong>. The official <a href="https://learn.microsoft.com/kusto/query/best-practices?view=microsoft-fabric" target="_blank" rel="noopener">query best-practices</a> reduce to a short list.</p>
+      <div class="table-wrap">
+        <table class="tbl t-slate">
+          <thead><tr><th>Do</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Filter early, right after the table</strong></td><td>Every later step processes less data</td></tr>
+            <tr><td><strong>Put the <code>datetime</code> filter first</strong></td><td>Kusto indexes time; a time predicate can eliminate whole data shards</td></tr>
+            <tr><td><strong>Order predicates by selectivity</strong></td><td>Most-selective filters first; single-column filters before multi-column ones</td></tr>
+            <tr><td><strong>Use <code>has</code>, not <code>contains</code></strong></td><td>Term index vs full substring scan</td></tr>
+            <tr><td><strong>Use <code>=~</code>, not <code>tolower()</code></strong></td><td>Keeps the column indexable</td></tr>
+            <tr><td><strong><code>project</code> only what you need, early</strong></td><td>Trims columns before expensive steps</td></tr>
+            <tr><td><strong>Smaller table on the left of a <code>join</code></strong></td><td>Reduces the data that must be broadcast/shuffled</td></tr>
+            <tr><td><strong><code>materialize()</code> a subquery used many times</strong></td><td>Computes it once instead of per reference</td></tr>
+            <tr><td><strong><code>limit</code> / <code>take</code> while developing</strong></td><td>Avoids scanning huge datasets during exploration</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout exam">
+        <p class="ct-title">Caveat — a time filter reduces scan; <code>limit</code> does not</p>
+        <p>A <code>where Timestamp &gt; ago(1h)</code> genuinely reduces the data scanned because of the datetime index. <code>limit</code> / <code>take</code> only cap the <em>rows returned</em> — the engine may still scan the whole table first. To make a query cheaper, tighten the time window and project fewer columns; don't rely on <code>limit</code> to save cost.</p>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="scenarios">Scenario quick reference</h2>
+      <div class="table-wrap">
+        <table class="tbl">
+          <thead><tr><th>Scenario</th><th>Deciding constraint</th><th>Answer</th></tr></thead>
+          <tbody>
+            <tr><td>Latest full record per device</td><td>Keep the whole row</td><td><strong><code>summarize arg_max(Timestamp, *) by DeviceId</code></strong></td></tr>
+            <tr><td>Count events per 5-minute bucket</td><td>Time bucketing</td><td><strong><code>summarize count() by bin(Timestamp, 5m)</code></strong></td></tr>
+            <tr><td>Gap-free series to chart or analyse</td><td>Fill empty buckets</td><td><strong><code>make-series … step … default=0</code></strong></td></tr>
+            <tr><td>Distinct users at scale</td><td>Approximate distinct</td><td><strong><code>dcount()</code></strong></td></tr>
+            <tr><td>Join dropped rows unexpectedly</td><td>Default join kind</td><td><strong>Specify <code>kind=inner</code></strong> (default is <code>innerunique</code>)</td></tr>
+            <tr><td>Enrich facts from a dimension table</td><td>Left-join semantics</td><td><strong><code>lookup</code></strong></td></tr>
+            <tr><td>Transform each record as it lands</td><td>Ingestion-time</td><td><strong>Update policy</strong></td></tr>
+            <tr><td>Always-fresh aggregate for fast reads</td><td>Post-ingestion aggregation</td><td><strong>Materialized view</strong></td></tr>
+            <tr><td>Substring/term match is slow</td><td>Index usage</td><td><strong><code>has</code> over <code>contains</code></strong></td></tr>
+            <tr><td>Case-insensitive equality</td><td>Keep the index</td><td><strong><code>Col =~ "value"</code></strong></td></tr>
+            <tr><td>Delete telemetry after N days</td><td>Lifecycle</td><td><strong>Retention policy</strong></td></tr>
+            <tr><td>Query Eventhouse data from a notebook</td><td>No duplication</td><td><strong>One logical copy</strong> (OneLake shortcut)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout warn">
+        <p class="ct-title">Verify against the docs</p>
+        <p>KQL is stable, but Real-Time Intelligence features and object syntax evolve. Confirm details against the <a href="https://learn.microsoft.com/kusto/query/kql-quick-reference?view=microsoft-fabric" target="_blank" rel="noopener">KQL quick reference</a>, <a href="https://learn.microsoft.com/kusto/management/materialized-views/materialized-view-overview?view=microsoft-fabric" target="_blank" rel="noopener">materialized views</a> and <a href="https://learn.microsoft.com/fabric/real-time-intelligence/" target="_blank" rel="noopener">Fabric Real-Time Intelligence</a> before relying on them.</p>
+      </div>
+
+      <div class="pager">
+        <a class="prev" href="../pyspark-deep-dive/"><div class="pg-dir">← Previous</div><div class="pg-title">PySpark deep dive</div></a>
+        <a class="next" href="../exam-tips/"><div class="pg-dir">Next →</div><div class="pg-title">Exam tips &amp; caveats</div></a>
+      </div>
+
+    </main>
+  </div>
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

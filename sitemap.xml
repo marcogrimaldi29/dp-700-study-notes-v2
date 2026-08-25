@@ -2,7 +2,7 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://marcogrimaldi29.com/dp-700-study-notes-v2/</loc>
-    <lastmod>2026-07-21</lastmod>
+    <lastmod>2026-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>1.0</priority>
   </url>
@@ -26,13 +26,25 @@
   </url>
   <url>
     <loc>https://marcogrimaldi29.com/dp-700-study-notes-v2/domain-3-monitor-optimize/</loc>
-    <lastmod>2026-07-21</lastmod>
+    <lastmod>2026-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
+    <loc>https://marcogrimaldi29.com/dp-700-study-notes-v2/pyspark-deep-dive/</loc>
+    <lastmod>2026-08-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://marcogrimaldi29.com/dp-700-study-notes-v2/kql-deep-dive/</loc>
+    <lastmod>2026-08-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://marcogrimaldi29.com/dp-700-study-notes-v2/exam-tips/</loc>
-    <lastmod>2026-07-21</lastmod>
+    <lastmod>2026-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>

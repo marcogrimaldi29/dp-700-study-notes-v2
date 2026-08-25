@@ -24,6 +24,8 @@
   --d2: #0d7d72; /* ingest & transform   */
   --d3: #d83b01; /* monitor & optimize   */
   --d4: #b38600; /* exam tips            */
+  --d5: #0e8ba8; /* KQL deep dive        */
+  --d6: #c2255c; /* PySpark deep dive    */
 
   /* Light theme surfaces */
   --bg: #f3f6fb;
@@ -70,6 +72,8 @@ html[data-theme="dark"] {
   --d2: #2aa89b;
   --d3: #ff7a45;
   --d4: #e0a800;
+  --d5: #22b8cf;
+  --d6: #e64980;
 }
 
 * { box-sizing: border-box; }

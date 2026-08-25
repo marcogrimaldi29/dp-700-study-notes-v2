@@ -30,6 +30,8 @@
     { id: "implement",   href: "domain-1-implement-manage/", label: "1 · Implement" },
     { id: "ingest",      href: "domain-2-ingest-transform/", label: "2 · Ingest" },
     { id: "monitor",     href: "domain-3-monitor-optimize/", label: "3 · Monitor" },
+    { id: "pyspark",     href: "pyspark-deep-dive/",        label: "PySpark" },
+    { id: "kql",         href: "kql-deep-dive/",            label: "KQL" },
     { id: "tips",        href: "exam-tips/",                label: "Exam Tips" }
   ];
 
@@ -109,6 +111,8 @@
           '<a href="' + ROOT + 'domain-1-implement-manage/">1 · Implement &amp; manage</a>' +
           '<a href="' + ROOT + 'domain-2-ingest-transform/">2 · Ingest &amp; transform</a>' +
           '<a href="' + ROOT + 'domain-3-monitor-optimize/">3 · Monitor &amp; optimize</a>' +
+          '<a href="' + ROOT + 'pyspark-deep-dive/">PySpark deep dive</a>' +
+          '<a href="' + ROOT + 'kql-deep-dive/">KQL deep dive</a>' +
           '<a href="' + ROOT + 'exam-tips/">Exam tips &amp; caveats</a>' +
         "</div>" +
         '<div class="footer-col">' +

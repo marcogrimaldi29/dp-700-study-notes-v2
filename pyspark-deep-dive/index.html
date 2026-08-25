@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PySpark Deep Dive — DP-700</title>
+  <meta name="description" content="DP-700 PySpark deep dive: Spark's driver/executor/partition model, lazy evaluation, DataFrame transformations, reading and writing Delta, joins and broadcast, window functions, Delta Lake MERGE/OPTIMIZE/VACUUM, structured streaming, and performance tuning (AQE, shuffle, skew, caching, V-Order) — grounded in Microsoft Fabric and Apache Spark documentation.">
+  <meta name="author" content="Marco Grimaldi">
+  <link rel="canonical" href="https://marcogrimaldi29.com/dp-700-study-notes-v2/pyspark-deep-dive/">
+  <meta name="robots" content="index, follow">
+  <meta name="theme-color" content="#c2255c">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="DP-700 Study Notes v2">
+  <meta property="og:title" content="DP-700 · PySpark deep dive">
+  <meta property="og:description" content="Spark internals, DataFrame transformations, Delta Lake operations, structured streaming and performance tuning for the DP-700 exam.">
+  <meta property="og:url" content="https://marcogrimaldi29.com/dp-700-study-notes-v2/pyspark-deep-dive/">
+  <meta property="og:image" content="https://marcogrimaldi29.com/dp-700-study-notes-v2/assets/images/site-mark-no-bg.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="DP-700 · PySpark deep dive">
+  <meta name="twitter:description" content="A code-first PySpark reference for Microsoft Fabric data engineering and the DP-700 exam.">
+  <meta name="twitter:image" content="https://marcogrimaldi29.com/dp-700-study-notes-v2/assets/images/site-mark-no-bg.png">
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@graph":[{"@type":"TechArticle","headline":"DP-700 · PySpark deep dive","description":"Spark internals, DataFrame transformations, Delta Lake operations, structured streaming and performance tuning for the DP-700 exam.","inLanguage":"en","url":"https://marcogrimaldi29.com/dp-700-study-notes-v2/pyspark-deep-dive/","author":{"@type":"Person","name":"Marco Grimaldi","url":"https://marcogrimaldi29.com/"},"isPartOf":"https://marcogrimaldi29.com/dp-700-study-notes-v2/"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"DP-700 Study Notes v2","item":"https://marcogrimaldi29.com/dp-700-study-notes-v2/"},{"@type":"ListItem","position":2,"name":"PySpark deep dive","item":"https://marcogrimaldi29.com/dp-700-study-notes-v2/pyspark-deep-dive/"}]}]}
+  </script>
+  <link rel="icon" href="../assets/images/site-mark-no-bg.png">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body data-page="pyspark">
+  <div class="layout" style="--accent:var(--d6)">
+
+    <aside class="toc"><h4>On this page</h4><nav id="toc-list"></nav></aside>
+
+    <main class="content">
+      <div class="page-head">
+        <div class="kicker">Deep dive · Engine skill</div>
+        <h1>PySpark deep dive</h1>
+        <p>The exam shows you PySpark and asks what it does — or what is wrong with it. This page is the code-first companion to Domain 2: Spark's execution model, the DataFrame API, Delta Lake operations, structured streaming and the performance knobs the exam loves to test.</p>
+      </div>
+
+      <div class="callout note">
+        <p class="ct-title">How this page fits the exam</p>
+        <p>DP-700 rarely asks you to write Spark from a blank cell, but it constantly asks you to <strong>read a snippet and pick the correct or corrected version</strong> — the right write mode, the deterministic dedup, the join that avoids a shuffle, the missing watermark. Everything here is grounded in the official <a href="https://learn.microsoft.com/fabric/data-engineering/spark-best-practices-basics" target="_blank" rel="noopener">Fabric Spark</a> and <a href="https://spark.apache.org/docs/latest/sql-programming-guide.html" target="_blank" rel="noopener">Apache Spark</a> documentation. Pair it with <a href="../domain-2-ingest-transform/">Domain 2</a> (loading patterns) and <a href="../domain-3-monitor-optimize/#spark">Domain 3</a> (Spark optimization).</p>
+      </div>
+
+      <div class="card">
+        <strong>On this page:</strong>
+        <ul style="margin-bottom:0">
+          <li><a href="#model">The Spark execution model</a> — driver, executors, partitions, lazy evaluation</li>
+          <li><a href="#io">Reading &amp; writing data</a> — Delta read/write, save modes, Spark SQL vs the DataFrame API</li>
+          <li><a href="#transforms">Core DataFrame transformations</a> — select, filter, withColumn, groupBy, agg</li>
+          <li><a href="#joins">Joins</a> — join types and broadcast joins</li>
+          <li><a href="#windows">Window functions</a> — ranking, lag/lead, running aggregates</li>
+          <li><a href="#delta">Delta Lake operations</a> — MERGE, time travel, OPTIMIZE, VACUUM</li>
+          <li><a href="#streaming">Structured streaming</a> — readStream, watermarks, output modes, checkpoints</li>
+          <li><a href="#performance">Performance &amp; optimization</a> — shuffle, skew, AQE, caching, V-Order</li>
+          <li><a href="#scenarios">Scenario quick reference</a></li>
+        </ul>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="model">The Spark execution model</h2>
+      <p>A Fabric notebook running the Spark kernel is a distributed program. One <strong>driver</strong> plans the work and coordinates; many <strong>executors</strong> do the work in parallel across a pool of worker nodes. Data is split into <strong>partitions</strong>, and each partition is processed by one <strong>task</strong> on one core.</p>
+
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+flowchart TD
+  D["Driver<br/>builds the plan, schedules tasks"] --> E1["Executor 1<br/>cores run tasks"]
+  D --> E2["Executor 2<br/>cores run tasks"]
+  D --> E3["Executor N<br/>cores run tasks"]
+  E1 --> P1["Partitions<br/>unit of parallelism"]
+  E2 --> P2["Partitions"]
+  E3 --> P3["Partitions"]
+        </div>
+        <div class="mm-cap">Partitions are the unit of parallelism: Spark runs as many tasks at once as there are free cores across the executors.</div>
+      </div>
+
+      <h3 id="lazy">Transformations vs actions</h3>
+      <p>Spark uses <strong>lazy evaluation</strong>. Transformations only build up a plan; nothing runs until an <strong>action</strong> forces execution. This is why a cell with ten <code>withColumn</code> calls returns instantly, and the one <code>.count()</code> at the end takes a minute.</p>
+      <div class="table-wrap">
+        <table class="tbl t-purple">
+          <thead><tr><th>Kind</th><th>Examples</th><th>Behaviour</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Transformation</strong> (lazy)</td><td><code>select</code>, <code>filter</code>, <code>withColumn</code>, <code>join</code>, <code>groupBy().agg()</code>, <code>orderBy</code>, <code>dropDuplicates</code></td><td>Returns a new DataFrame describing <em>what to do</em>; runs nothing yet</td></tr>
+            <tr><td><strong>Narrow</strong> transformation</td><td><code>select</code>, <code>filter</code>, <code>withColumn</code></td><td>Each output partition depends on one input partition — no data movement</td></tr>
+            <tr><td><strong>Wide</strong> transformation</td><td><code>groupBy</code>, <code>join</code>, <code>orderBy</code>, <code>distinct</code></td><td>Requires a <strong>shuffle</strong> — data is repartitioned across the network</td></tr>
+            <tr><td><strong>Action</strong> (eager)</td><td><code>count</code>, <code>collect</code>, <code>show</code>, <code>write</code>, <code>save</code>, <code>toPandas</code>, <code>first</code></td><td>Triggers the whole plan to actually execute</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout exam">
+        <p class="ct-title">Caveat — nothing runs until an action</p>
+        <p>If a question says "the read cell finished instantly but the write cell took ten minutes", that is lazy evaluation, not a bug — the read was a transformation and the <code>write</code> is the action that finally executed the whole chain. Errors in a transformation (a bad column name) also surface only when the action runs.</p>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="io">Reading &amp; writing data</h2>
+      <p>Delta is the default table format in Fabric. Tables live under a Lakehouse's <code>Tables/</code> folder; files live under <code>Files/</code>. You can address a table by name (managed) or by path.</p>
+
+      <div class="code-block"><span class="lang">PySpark · read and write Delta</span><pre class="code"><code><span class="cm"># Read a managed Delta table by name…</span>
+df = spark.read.table(<span class="st">"bronze_sales"</span>)
+
+<span class="cm"># …or by format + path</span>
+df = spark.read.format(<span class="st">"delta"</span>).load(<span class="st">"Tables/bronze_sales"</span>)
+
+<span class="cm"># Read raw files (schema inference is expensive on big JSON — supply a schema)</span>
+raw = spark.read.option(<span class="st">"header"</span>, <span class="st">"true"</span>).csv(<span class="st">"Files/landing/*.csv"</span>)
+
+<span class="cm"># Write as a managed Delta table</span>
+df.write.format(<span class="st">"delta"</span>).mode(<span class="st">"overwrite"</span>).saveAsTable(<span class="st">"silver_sales"</span>)
+
+<span class="cm"># Write to an explicit path under Tables/</span>
+df.write.format(<span class="st">"delta"</span>).mode(<span class="st">"append"</span>).save(<span class="st">"Tables/silver_sales"</span>)</code></pre></div>
+
+      <div class="table-wrap">
+        <table class="tbl t-purple">
+          <thead><tr><th>Save mode</th><th>Effect if the table exists</th></tr></thead>
+          <tbody>
+            <tr><td><code>append</code></td><td>Adds new rows, keeps existing data</td></tr>
+            <tr><td><code>overwrite</code></td><td>Replaces all data; enforces the existing schema unless overridden</td></tr>
+            <tr><td><code>error</code> / <code>errorifexists</code> (default)</td><td>Fails if the table already exists</td></tr>
+            <tr><td><code>ignore</code></td><td>Does nothing if the table already exists</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout exam">
+        <p class="ct-title">Caveat — overwrite vs overwriteSchema vs mergeSchema</p>
+        <p><code>mode("overwrite")</code> replaces the <em>data</em> but still enforces the current schema — a changed column set fails. Add <code>.option("overwriteSchema","true")</code> to replace the schema too. For <em>additive</em> changes (new columns only), prefer <code>.option("mergeSchema","true")</code>, which appends the new columns without discarding the old definition. This exact distinction appears on the exam.</p>
+      </div>
+
+      <h3 id="spark-sql">Spark SQL vs the DataFrame API</h3>
+      <p>The two are interchangeable and compile to the same plan through the Catalyst optimizer. Use whichever reads more clearly; you must be able to read <strong>both</strong> on the exam.</p>
+      <div class="code-block"><span class="lang">PySpark · same query, two styles</span><pre class="code"><code><span class="cm"># DataFrame API</span>
+<span class="kw">from</span> pyspark.sql.functions <span class="kw">import</span> col, sum <span class="kw">as</span> _sum
+result = (df.filter(col(<span class="st">"amount"</span>) &gt; 0)
+            .groupBy(<span class="st">"region"</span>)
+            .agg(_sum(<span class="st">"amount"</span>).alias(<span class="st">"total"</span>)))
+
+<span class="cm"># Spark SQL — register or reference the table by name</span>
+result = spark.sql(<span class="st">"""
+    SELECT region, SUM(amount) AS total
+    FROM   bronze_sales
+    WHERE  amount &gt; 0
+    GROUP BY region
+"""</span>)
+
+display(result)   <span class="cm"># Fabric's rich table/chart renderer</span></code></pre></div>
+
+      <!-- ============================================================= -->
+      <h2 id="transforms">Core DataFrame transformations</h2>
+      <p>The everyday verbs. Almost every snippet on the exam is built from these.</p>
+      <div class="table-wrap">
+        <table class="tbl t-purple">
+          <thead><tr><th>Operation</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>select(...)</code></td><td>Choose / compute columns</td></tr>
+            <tr><td><code>filter(...)</code> / <code>where(...)</code></td><td>Keep rows matching a predicate (identical operators)</td></tr>
+            <tr><td><code>withColumn("c", expr)</code></td><td>Add or replace one column</td></tr>
+            <tr><td><code>withColumnRenamed(a, b)</code></td><td>Rename a column</td></tr>
+            <tr><td><code>drop("c")</code></td><td>Remove a column</td></tr>
+            <tr><td><code>groupBy(...).agg(...)</code></td><td>Aggregate by keys</td></tr>
+            <tr><td><code>orderBy(...)</code> / <code>sort(...)</code></td><td>Sort (a wide, shuffling operation)</td></tr>
+            <tr><td><code>dropDuplicates([keys])</code></td><td>Remove duplicate rows (arbitrary survivor — see caveat)</td></tr>
+            <tr><td><code>fillna(...)</code> / <code>na.fill(...)</code></td><td>Replace nulls</td></tr>
+            <tr><td><code>union(...)</code></td><td>Stack two DataFrames with the same schema</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="code-block"><span class="lang">PySpark · a typical clean-and-shape chain</span><pre class="code"><code><span class="kw">from</span> pyspark.sql.functions <span class="kw">import</span> col, year, month, upper, coalesce, lit
+
+clean = (df
+    .filter(col(<span class="st">"amount"</span>) &gt; 0)                        <span class="cm"># drop invalid rows</span>
+    .withColumn(<span class="st">"order_year"</span>, year(<span class="st">"order_date"</span>))       <span class="cm"># derive columns</span>
+    .withColumn(<span class="st">"order_month"</span>, month(<span class="st">"order_date"</span>))
+    .withColumn(<span class="st">"region"</span>, coalesce(col(<span class="st">"region"</span>), lit(<span class="st">"UNKNOWN"</span>)))
+    .withColumnRenamed(<span class="st">"cust_id"</span>, <span class="st">"customer_id"</span>)
+    .select(<span class="st">"customer_id"</span>, <span class="st">"order_year"</span>, <span class="st">"order_month"</span>, <span class="st">"region"</span>, <span class="st">"amount"</span>))</code></pre></div>
+
+      <div class="callout tip">
+        <p class="ct-title">Column references: <code>col("x")</code>, <code>"x"</code>, and <code>df.x</code></p>
+        <p>Most transformations accept a plain string column name. You need <code>col("x")</code> (or <code>df["x"]</code>) when you build an <em>expression</em> — comparisons, arithmetic, <code>.alias()</code>, <code>.desc()</code>. Prefer built-in functions from <code>pyspark.sql.functions</code> over Python UDFs: built-ins run inside the JVM and are optimised by Catalyst, while a Python UDF runs in a separate Python process and blocks many optimisations.</p>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="joins">Joins</h2>
+      <div class="table-wrap">
+        <table class="tbl t-purple">
+          <thead><tr><th>Join type</th><th>Keeps</th></tr></thead>
+          <tbody>
+            <tr><td><code>inner</code> (default)</td><td>Rows with a match on both sides</td></tr>
+            <tr><td><code>left</code> / <code>left_outer</code></td><td>All left rows; nulls where the right has no match</td></tr>
+            <tr><td><code>right</code> / <code>right_outer</code></td><td>All right rows; nulls where the left has no match</td></tr>
+            <tr><td><code>full</code> / <code>full_outer</code></td><td>All rows from both sides</td></tr>
+            <tr><td><code>left_semi</code></td><td>Left rows that <em>have</em> a match — left columns only (a filter)</td></tr>
+            <tr><td><code>left_anti</code></td><td>Left rows with <em>no</em> match — left columns only (an anti-filter)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="code-block"><span class="lang">PySpark · join, and broadcast the small side</span><pre class="code"><code><span class="kw">from</span> pyspark.sql.functions <span class="kw">import</span> broadcast
+
+<span class="cm"># Standard join on a shared key</span>
+enriched = fact.join(dim_customer, on=<span class="st">"customer_id"</span>, how=<span class="st">"left"</span>)
+
+<span class="cm"># Different column names → explicit condition</span>
+enriched = fact.join(dim, fact.cust_id == dim.id, how=<span class="st">"inner"</span>)
+
+<span class="cm"># Broadcast a small dimension to every executor → no shuffle of the big fact</span>
+enriched = fact.join(broadcast(dim_customer), on=<span class="st">"customer_id"</span>, how=<span class="st">"left"</span>)</code></pre></div>
+
+      <div class="callout exam">
+        <p class="ct-title">Caveat — broadcast the small side to kill the shuffle</p>
+        <p>A default join shuffles <em>both</em> sides across the network on the join key — expensive when one side is a huge fact table. If one side is small (a dimension, a lookup), <code>broadcast()</code> ships it to every executor so the big side never moves. Adaptive Query Execution can do this automatically at runtime when it sees the small side is under <code>spark.sql.autoBroadcastJoinThreshold</code>. "Join is slow because of a large shuffle, one table is small" → <strong>broadcast join</strong>.</p>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="windows">Window functions</h2>
+      <p>Window functions compute a value <em>per row</em> over a group of related rows, without collapsing them the way <code>groupBy</code> does. They are the exam's favourite tool for <strong>deterministic deduplication</strong> and running calculations.</p>
+
+      <div class="code-block"><span class="lang">PySpark · ranking, dedup, and running totals</span><pre class="code"><code><span class="kw">from</span> pyspark.sql.window <span class="kw">import</span> Window
+<span class="kw">from</span> pyspark.sql.functions <span class="kw">import</span> row_number, rank, dense_rank, lag, sum <span class="kw">as</span> _sum, col
+
+<span class="cm"># Keep only the newest row per order_id — deterministic dedup</span>
+w = Window.partitionBy(<span class="st">"order_id"</span>).orderBy(col(<span class="st">"modified_at"</span>).desc())
+latest = (df.withColumn(<span class="st">"rn"</span>, row_number().over(w))
+            .filter(col(<span class="st">"rn"</span>) == 1)
+            .drop(<span class="st">"rn"</span>))
+
+<span class="cm"># Running total of amount per customer, ordered by date</span>
+wr = (Window.partitionBy(<span class="st">"customer_id"</span>).orderBy(<span class="st">"order_date"</span>)
+            .rowsBetween(Window.unboundedPreceding, Window.currentRow))
+running = df.withColumn(<span class="st">"running_total"</span>, _sum(<span class="st">"amount"</span>).over(wr))
+
+<span class="cm"># Previous order amount for each customer</span>
+prev = df.withColumn(<span class="st">"prev_amount"</span>, lag(<span class="st">"amount"</span>, 1).over(
+           Window.partitionBy(<span class="st">"customer_id"</span>).orderBy(<span class="st">"order_date"</span>)))</code></pre></div>
+
+      <div class="table-wrap">
+        <table class="tbl t-purple">
+          <thead><tr><th>Function</th><th>Returns</th></tr></thead>
+          <tbody>
+            <tr><td><code>row_number()</code></td><td>Unique 1,2,3… per partition — <strong>no ties</strong>, ideal for "keep the latest"</td></tr>
+            <tr><td><code>rank()</code></td><td>Ties share a rank, then it <em>skips</em> (1,1,3)</td></tr>
+            <tr><td><code>dense_rank()</code></td><td>Ties share a rank, <em>no</em> gap (1,1,2)</td></tr>
+            <tr><td><code>lag()</code> / <code>lead()</code></td><td>Value from a previous / following row</td></tr>
+            <tr><td><code>sum/avg/count().over(w)</code></td><td>Running or windowed aggregate that keeps every row</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout exam">
+        <p class="ct-title">Caveat — <code>dropDuplicates</code> is non-deterministic</p>
+        <p><code>dropDuplicates(["order_id"])</code> keeps an <strong>arbitrary</strong> row from each group. When the question needs "the most recent version", you must use a <strong>window with <code>row_number()</code> ordered by the timestamp</strong> and filter to <code>rn == 1</code>. If the stem stresses <em>which</em> row survives, the answer is the window, not <code>dropDuplicates</code>.</p>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="delta">Delta Lake operations</h2>
+      <p>Delta adds ACID transactions, upserts, and time travel on top of Parquet. The <code>DeltaTable</code> API exposes the operations that plain DataFrame writes cannot.</p>
+
+      <div class="code-block"><span class="lang">PySpark · MERGE (upsert), UPDATE, DELETE</span><pre class="code"><code><span class="kw">from</span> delta.tables <span class="kw">import</span> DeltaTable
+
+target = DeltaTable.forName(spark, <span class="st">"silver_customer"</span>)
+
+(target.alias(<span class="st">"t"</span>)
+   .merge(updates.alias(<span class="st">"s"</span>), <span class="st">"t.customer_id = s.customer_id"</span>)
+   .whenMatchedUpdateAll()
+   .whenNotMatchedInsertAll()
+   .execute())
+
+<span class="cm"># Point UPDATE / DELETE without rewriting the table by hand</span>
+target.update(condition=<span class="st">"segment = 'legacy'"</span>, set={<span class="st">"segment"</span>: <span class="st">"'standard'"</span>})
+target.delete(<span class="st">"is_test = true"</span>)</code></pre></div>
+
+      <div class="code-block"><span class="lang">PySpark · time travel, OPTIMIZE, VACUUM</span><pre class="code"><code><span class="cm"># Read an older version (audit, recovery, reproducibility)</span>
+old = spark.read.format(<span class="st">"delta"</span>).option(<span class="st">"versionAsOf"</span>, 3).table(<span class="st">"silver_sales"</span>)
+old = spark.read.format(<span class="st">"delta"</span>).option(<span class="st">"timestampAsOf"</span>, <span class="st">"2026-08-01"</span>).table(<span class="st">"silver_sales"</span>)
+
+<span class="cm"># Compact small files; optionally cluster co-accessed columns</span>
+spark.sql(<span class="st">"OPTIMIZE silver_sales"</span>)
+spark.sql(<span class="st">"OPTIMIZE silver_sales ZORDER BY (customer_id, order_date)"</span>)
+
+<span class="cm"># Remove files older than the retention window (default 7 days)</span>
+spark.sql(<span class="st">"VACUUM silver_sales RETAIN 168 HOURS"</span>)</code></pre></div>
+
+      <div class="callout exam">
+        <p class="ct-title">Caveat — OPTIMIZE, ZORDER and VACUUM do different jobs</p>
+        <p><strong>OPTIMIZE</strong> compacts many small files into fewer large ones (the small-file problem). <strong>ZORDER BY</strong> co-locates rows by the columns you filter on, so predicate pushdown skips more files. <strong>VACUUM</strong> deletes old data files no longer referenced — it reclaims storage but <strong>breaks time travel</strong> beyond the retention window, so never shorten retention below the history you need. These are Spark SQL commands: they run in notebooks / Spark jobs, not in the SQL analytics endpoint.</p>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="streaming">Structured streaming</h2>
+      <p>Structured streaming treats an unbounded stream as a table that grows. The DataFrame API is nearly identical to batch; the differences are <code>readStream</code>/<code>writeStream</code>, a mandatory <strong>checkpoint</strong>, a <strong>watermark</strong> to bound state, and an <strong>output mode</strong>. See <a href="../domain-2-ingest-transform/#spark-streaming">Domain 2</a> for how it fits the streaming loading pattern.</p>
+
+      <div class="code-block"><span class="lang">PySpark · a stateful streaming aggregation</span><pre class="code"><code><span class="kw">from</span> pyspark.sql.functions <span class="kw">import</span> window, avg, count
+
+stream = spark.readStream.format(<span class="st">"delta"</span>).table(<span class="st">"bronze_events"</span>)
+
+agg = (stream
+    .withWatermark(<span class="st">"event_time"</span>, <span class="st">"10 minutes"</span>)          <span class="cm"># tolerate 10 min of lateness</span>
+    .groupBy(window(<span class="st">"event_time"</span>, <span class="st">"5 minutes"</span>), <span class="st">"device_id"</span>)
+    .agg(avg(<span class="st">"temperature"</span>).alias(<span class="st">"avg_temp"</span>),
+         count(<span class="st">"*"</span>).alias(<span class="st">"n"</span>)))
+
+(agg.writeStream
+    .format(<span class="st">"delta"</span>)
+    .outputMode(<span class="st">"append"</span>)
+    .option(<span class="st">"checkpointLocation"</span>, <span class="st">"Files/checkpoints/sensor_agg"</span>)   <span class="cm"># mandatory</span>
+    .trigger(processingTime=<span class="st">"1 minute"</span>)
+    .toTable(<span class="st">"silver_sensor_agg"</span>))</code></pre></div>
+
+      <div class="table-wrap">
+        <table class="tbl t-purple">
+          <thead><tr><th>Output mode</th><th>Writes</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td><code>append</code></td><td>Only new, final rows</td><td>Needs a watermark for windowed aggregations; a window emits when it closes</td></tr>
+            <tr><td><code>update</code></td><td>Only rows that changed this batch</td><td>Sink must support updates</td></tr>
+            <tr><td><code>complete</code></td><td>The whole result table every batch</td><td>Aggregations only; state grows unbounded without a watermark</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout exam">
+        <p class="ct-title">Caveat — checkpoint and watermark are non-negotiable</p>
+        <p>The <strong>checkpoint location</strong> stores stream offsets and aggregation state so a restarted job resumes exactly where it stopped — it is mandatory, and two streams must never share one directory. A <strong>watermark</strong> bounds how long late-arriving state is kept; without it, a stateful aggregation's state grows forever until the job runs out of memory. "Streaming job memory grows until it crashes" → missing <code>withWatermark()</code>. "Restarted stream reprocessed everything" → checkpoint missing or deleted.</p>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="performance">Performance &amp; optimization</h2>
+      <p>Partitions are the unit of parallelism, and the <strong>shuffle</strong> — moving data across the network for wide operations — is the usual bottleneck. Diagnose in the Spark UI, then match the fix to the symptom.</p>
+
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+flowchart TD
+  S([Spark job is slow]) --> UI["Diagnose in the Spark UI"]
+  UI -->|"Max task time much greater than median"| SK["Data skew<br/>salt the key · AQE skew join · repartition"]
+  UI -->|"Large shuffle read/write"| SH["Reduce shuffle<br/>broadcast the small side · filter earlier"]
+  UI -->|"Spill to disk"| SP["Memory pressure<br/>more partitions · larger nodes · avoid huge broadcast"]
+  UI -->|"Thousands of tiny files"| SF["OPTIMIZE the table<br/>enable optimize write"]
+  UI -->|"Driver OOM"| DR["Avoid collect() / toPandas()<br/>on large data"]
+        </div>
+        <div class="mm-cap">Read the symptom off the Spark UI, then apply the matching fix. Most "slow Spark" questions map to exactly one of these branches.</div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="tbl t-purple">
+          <thead><tr><th>Lever</th><th>What it does / when to reach for it</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Adaptive Query Execution (AQE)</strong></td><td>Re-optimises at runtime: coalesces shuffle partitions, converts sort-merge joins to broadcast, and handles skew joins. Keep it enabled — it is the default in Fabric</td></tr>
+            <tr><td><strong>Broadcast join</strong></td><td>Ship a small table to every executor so the large side never shuffles</td></tr>
+            <tr><td><strong>Filter &amp; prune early</strong></td><td>Push <code>filter</code> and column <code>select</code> before joins; the Catalyst optimizer pushes predicates down for you when you use the DataFrame API</td></tr>
+            <tr><td><strong>Repartition vs coalesce</strong></td><td><code>repartition(n)</code> reshuffles into <em>n</em> balanced partitions (fixes skew, can grow count). <code>coalesce(n)</code> only <em>reduces</em> partitions without a full shuffle — use before a write</td></tr>
+            <tr><td><strong>Salting</strong></td><td>Add a random suffix to a hot join/group key to spread it across partitions when one key dominates</td></tr>
+            <tr><td><strong>Cache / persist</strong></td><td>Materialise a DataFrame reused several times; <code>unpersist()</code> when done. Caching something used once wastes memory</td></tr>
+            <tr><td><strong>V-Order + optimize write</strong></td><td>Fabric-native: V-Order lays out Parquet for fast reads across all engines; optimize write produces fewer, larger files on write</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="code-block"><span class="lang">PySpark · the common performance knobs</span><pre class="code"><code><span class="cm"># Fabric write optimizations (often set once per session)</span>
+spark.conf.set(<span class="st">"spark.sql.parquet.vorder.enabled"</span>, <span class="st">"true"</span>)
+spark.conf.set(<span class="st">"spark.microsoft.delta.optimizeWrite.enabled"</span>, <span class="st">"true"</span>)
+
+<span class="cm"># AQE is on by default; skew handling is part of it</span>
+spark.conf.set(<span class="st">"spark.sql.adaptive.enabled"</span>, <span class="st">"true"</span>)
+spark.conf.set(<span class="st">"spark.sql.adaptive.skewJoin.enabled"</span>, <span class="st">"true"</span>)
+
+<span class="cm"># Cache a DataFrame reused across several actions, then release it</span>
+<span class="kw">from</span> pyspark <span class="kw">import</span> StorageLevel
+hot = clean.persist(StorageLevel.MEMORY_AND_DISK)
+hot.count()          <span class="cm"># materialise once</span>
+<span class="cm"># … reuse hot several times …</span>
+hot.unpersist()
+
+<span class="cm"># Balance skewed partitions before an expensive stage; shrink before a write</span>
+balanced = clean.repartition(200, <span class="st">"customer_id"</span>)
+clean.coalesce(1).write.format(<span class="st">"delta"</span>).mode(<span class="st">"overwrite"</span>).saveAsTable(<span class="st">"gold_small"</span>)</code></pre></div>
+
+      <div class="callout exam">
+        <p class="ct-title">Caveat — <code>collect()</code> and <code>toPandas()</code> pull to the driver</p>
+        <p>Actions like <code>collect()</code>, <code>toPandas()</code> and a wide <code>countByKey()</code> move <em>all</em> results into driver memory. On a large DataFrame that is a classic <strong>driver out-of-memory</strong> cause. Keep work distributed; if you must materialise, aggregate or <code>limit</code> first. <strong>Executor</strong> OOM, by contrast, comes from wide shuffles, skew, or over-caching — different fix (more partitions, AQE, selective persist).</p>
+      </div>
+      <div class="callout tip">
+        <p class="ct-title">Prefer DataFrames over RDDs, and built-ins over UDFs</p>
+        <p>The DataFrame / Spark SQL API runs through the Catalyst optimizer and Tungsten engine; raw RDDs bypass both. Built-in functions from <code>pyspark.sql.functions</code> beat Python UDFs, which run in a separate Python process and block many optimisations. If a snippet uses an RDD or a Python UDF where a DataFrame built-in would do, that is usually the thing the question wants you to improve.</p>
+      </div>
+
+      <!-- ============================================================= -->
+      <h2 id="scenarios">Scenario quick reference</h2>
+      <div class="table-wrap">
+        <table class="tbl">
+          <thead><tr><th>Scenario</th><th>Deciding constraint</th><th>Answer</th></tr></thead>
+          <tbody>
+            <tr><td>Read cell instant, write cell slow</td><td>Lazy evaluation</td><td><strong>Normal</strong> — the write is the first action</td></tr>
+            <tr><td>Overwrite fails after adding a column</td><td>Schema change</td><td><strong><code>overwriteSchema=true</code></strong> (or <code>mergeSchema</code> if additive)</td></tr>
+            <tr><td>Keep only the newest row per key</td><td>Deterministic dedup</td><td><strong><code>row_number()</code> over a window</strong>, filter <code>rn==1</code></td></tr>
+            <tr><td>Join slow, one side is a small dimension</td><td>Large shuffle</td><td><strong>Broadcast join</strong></td></tr>
+            <tr><td>Upsert changed rows into a Delta table</td><td>Insert + update</td><td><strong>Delta <code>MERGE</code></strong></td></tr>
+            <tr><td>Recover yesterday's version of a table</td><td>History</td><td><strong>Time travel</strong> (<code>versionAsOf</code> / <code>timestampAsOf</code>)</td></tr>
+            <tr><td>Table has thousands of tiny files</td><td>Small-file problem</td><td><strong>OPTIMIZE</strong> (+ optimize write on ingest)</td></tr>
+            <tr><td>Filtered queries still scan everything</td><td>File skipping</td><td><strong>OPTIMIZE … ZORDER BY</strong> the filter columns</td></tr>
+            <tr><td>A few tasks take far longer than the rest</td><td>Data skew</td><td><strong>Salt the key / AQE skew join</strong></td></tr>
+            <tr><td>Streaming job's memory grows until it fails</td><td>Unbounded state</td><td><strong>Add <code>withWatermark()</code></strong></td></tr>
+            <tr><td>Restarted stream reprocessed everything</td><td>Lost offsets</td><td><strong>Checkpoint location</strong> missing or deleted</td></tr>
+            <tr><td>Driver runs out of memory</td><td>Data pulled local</td><td><strong>Avoid <code>collect()</code> / <code>toPandas()</code></strong> on big data</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout warn">
+        <p class="ct-title">Verify against the docs</p>
+        <p>Spark and Delta APIs are stable, but Fabric adds and renames features (V-Order, optimize write, the Native Execution Engine). Confirm details against the <a href="https://learn.microsoft.com/fabric/data-engineering/spark-best-practices-basics" target="_blank" rel="noopener">Fabric Spark best-practices</a>, <a href="https://learn.microsoft.com/fabric/data-engineering/delta-optimization-and-v-order" target="_blank" rel="noopener">Delta optimization &amp; V-Order</a> and the <a href="https://spark.apache.org/docs/latest/api/python/index.html" target="_blank" rel="noopener">PySpark API reference</a> before relying on them.</p>
+      </div>
+
+      <div class="pager">
+        <a class="prev" href="../domain-3-monitor-optimize/"><div class="pg-dir">← Previous</div><div class="pg-title">Domain 3 · Monitor &amp; optimize</div></a>
+        <a class="next" href="../kql-deep-dive/"><div class="pg-dir">Next →</div><div class="pg-title">KQL deep dive</div></a>
+      </div>
+
+    </main>
+  </div>
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>
