@@ -379,6 +379,9 @@ ol.steps > li::before { counter-increment: step; content: counter(step); positio
 .support-actions svg { width: 16px; height: 16px; flex: none; }
 .support-actions .support-star { background: var(--surface-2); border-color: var(--border-strong); color: var(--text); }
 .support-actions .support-star:hover { background: var(--surface-3); border-color: var(--ms-blue); color: var(--text); }
+/* LinkedIn's own blue in both themes, lightening on hover. */
+.support-actions .support-linkedin { background: #0a66c2; border-color: #0a66c2; color: #fff; }
+.support-actions .support-linkedin:hover { background: #1275d1; border-color: #1275d1; color: #fff; }
 /* Buy Me a Coffee's own brand colours in both themes, so the button reads as
    theirs; on hover the contour turns their near-black, doubled by an inset
    ring so it still shows against the dark callout. */
