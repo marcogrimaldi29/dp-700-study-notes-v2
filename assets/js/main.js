@@ -236,29 +236,49 @@
   function mermaidTheme() {
     return document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "neutral";
   }
+  // Each diagram's original source, kept as a detached DOM clone rather than an
+  // HTML string. Restoring it re-attaches copies of the original nodes, so no
+  // markup is ever re-parsed from page text (CodeQL js/xss-through-dom), escaped
+  // text like &lt; stays text, and <br/> line breaks survive a theme switch.
+  var mermaidSrc = new WeakMap();
   function renderMermaid(reRender) {
     if (!window.mermaid) return;
     var nodes = document.querySelectorAll(".mermaid");
     if (!nodes.length) return;
     if (reRender) {
       nodes.forEach(function (n) {
-        if (n.getAttribute("data-src")) { n.removeAttribute("data-processed"); n.innerHTML = n.getAttribute("data-src"); }
+        var src = mermaidSrc.get(n);
+        if (!src) return;
+        n.removeAttribute("data-processed");
+        n.textContent = "";
+        n.appendChild(src.cloneNode(true));
       });
     } else {
-      nodes.forEach(function (n) { if (!n.getAttribute("data-src")) n.setAttribute("data-src", n.textContent.trim()); });
+      nodes.forEach(function (n) {
+        if (mermaidSrc.has(n)) return;
+        var range = document.createRange();
+        range.selectNodeContents(n);
+        mermaidSrc.set(n, range.cloneContents());
+      });
     }
     window.mermaid.initialize({
-      startOnLoad: false, theme: mermaidTheme(), securityLevel: "loose",
+      startOnLoad: false, theme: mermaidTheme(), securityLevel: "strict",
       fontFamily: '"Segoe UI", system-ui, sans-serif',
       flowchart: { curve: "basis", useMaxWidth: true }
     });
     try { window.mermaid.run({ nodes: nodes }); } catch (e) { console.warn("mermaid", e); }
     window.__mermaidReady = true;
   }
+  // Pinned to an exact version with a Subresource Integrity hash: the browser
+  // refuses to run the file if the CDN ever serves different bytes. When
+  // upgrading, take the new hash from
+  // https://data.jsdelivr.com/v1/packages/npm/mermaid@<version>?structure=flat
   function loadMermaid() {
     if (!document.querySelector(".mermaid")) return;
     var s = document.createElement("script");
-    s.src = "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js";
+    s.src = "https://cdn.jsdelivr.net/npm/mermaid@10.9.8/dist/mermaid.min.js";
+    s.integrity = "sha256-jWB9fvHQd6iqIC4Y5iISv6mSxov+q8XPRdUaEo/mZ10=";
+    s.crossOrigin = "anonymous";
     s.onload = function () { renderMermaid(false); };
     document.head.appendChild(s);
   }
