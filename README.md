@@ -83,7 +83,7 @@ All three are equally weighted — there is no domain safe to skip.
 
 ## Spotted a mistake?
 
-Microsoft Fabric ships changes almost weekly, and features regularly move between preview and general availability — some details here **will** age. If you spot something out of date or wrong, please [report an issue](https://github.com/marcogrimaldi29/dp-700-study-notes-v2/issues).
+Microsoft Fabric ships changes almost weekly, and features regularly move between preview and general availability — some details here **will** age. If you spot something out of date or wrong, please [report an issue](https://github.com/marcogrimaldi29/dp-700-study-notes-v2/issues). The [contributing guide](.github/CONTRIBUTING.md) explains what makes a report quick to fix and what's out of scope.
 
 ---
 
